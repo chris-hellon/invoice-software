@@ -240,7 +240,7 @@ public class PdfGeneratorService
             // Centered Header Layout with colored background - matching web component
             var hasLogo = showLogo && businessProfile is { Logo.Length: > 0 };
 
-            column.Item().Background(primaryColor).Padding(24).AlignCenter().AlignMiddle().Column(centerCol =>
+            column.Item().Background(primaryColor).Padding(24).Column(centerCol =>
             {
                 if (hasLogo)
                 {
@@ -251,12 +251,24 @@ public class PdfGeneratorService
                     catch { /* Skip logo if image data is invalid */ }
                 }
 
-                var companyName = businessProfile?.TradingName ?? businessProfile?.CompanyName ?? "Your Company";
-                centerCol.Item().AlignCenter().Text(companyName).FontSize(18).Bold().FontColor(Colors.White);
+                var companyName = !string.IsNullOrWhiteSpace(businessProfile?.TradingName)
+                    ? businessProfile.TradingName
+                    : !string.IsNullOrWhiteSpace(businessProfile?.CompanyName)
+                        ? businessProfile.CompanyName
+                        : null;
+
+                if (!string.IsNullOrEmpty(companyName))
+                {
+                    centerCol.Item().AlignCenter().Text(companyName).FontSize(18).Bold().FontColor(Colors.White);
+                }
 
                 if (businessProfile?.Address != null)
                 {
-                    centerCol.Item().PaddingTop(8).Column(addressCol =>
+                    // Only add top padding if there was a company name or logo before
+                    var needsTopPadding = hasLogo || !string.IsNullOrEmpty(companyName);
+                    var addressContainer = needsTopPadding ? centerCol.Item().PaddingTop(8) : centerCol.Item();
+
+                    addressContainer.Column(addressCol =>
                     {
                         if (!string.IsNullOrEmpty(businessProfile.Address.Street1))
                             addressCol.Item().AlignCenter().Text(businessProfile.Address.Street1).FontSize(10).FontColor("#ffffffcc");
@@ -323,36 +335,43 @@ public class PdfGeneratorService
             // Standard Header Layout (default) with colored background
             var hasLogo = showLogo && businessProfile is { Logo.Length: > 0 };
 
-            column.Item().Background(primaryColor).Padding(20).Row(row =>
+            column.Item().Background(primaryColor).Padding(20).Column(leftCol =>
             {
-                // Left side - Company info (vertically centered when no logo)
-                row.RelativeItem().AlignMiddle().Column(leftCol =>
+                if (hasLogo)
                 {
-                    if (hasLogo)
+                    try
                     {
-                        try
-                        {
-                            leftCol.Item().Height(48).Image(businessProfile!.Logo).FitHeight();
-                            leftCol.Item().PaddingTop(12);
-                        }
-                        catch { /* Skip logo if image data is invalid */ }
+                        leftCol.Item().Height(48).Image(businessProfile!.Logo).FitHeight();
+                        leftCol.Item().PaddingTop(12);
                     }
+                    catch { /* Skip logo if image data is invalid */ }
+                }
 
-                    var companyName = businessProfile?.TradingName ?? businessProfile?.CompanyName ?? "Your Company";
+                var companyName = !string.IsNullOrWhiteSpace(businessProfile?.TradingName)
+                    ? businessProfile.TradingName
+                    : !string.IsNullOrWhiteSpace(businessProfile?.CompanyName)
+                        ? businessProfile.CompanyName
+                        : null;
+
+                if (!string.IsNullOrEmpty(companyName))
+                {
                     leftCol.Item().Text(companyName).FontSize(18).Bold().FontColor(Colors.White);
+                }
 
-                    if (businessProfile?.Address != null)
-                    {
+                if (businessProfile?.Address != null)
+                {
+                    var needsTopPadding = hasLogo || !string.IsNullOrEmpty(companyName);
+                    if (needsTopPadding)
                         leftCol.Item().PaddingTop(8);
-                        if (!string.IsNullOrEmpty(businessProfile.Address.Street1))
-                            leftCol.Item().Text(businessProfile.Address.Street1).FontSize(10).FontColor(Colors.White);
-                        var cityLine = string.Join(", ", new[] { businessProfile.Address.City, businessProfile.Address.State, businessProfile.Address.PostalCode }.Where(s => !string.IsNullOrEmpty(s)));
-                        if (!string.IsNullOrEmpty(cityLine))
-                            leftCol.Item().Text(cityLine).FontSize(10).FontColor(Colors.White);
-                        if (!string.IsNullOrEmpty(businessProfile.Address.Country))
-                            leftCol.Item().Text(businessProfile.Address.Country).FontSize(10).FontColor(Colors.White);
-                    }
-                });
+
+                    if (!string.IsNullOrEmpty(businessProfile.Address.Street1))
+                        leftCol.Item().Text(businessProfile.Address.Street1).FontSize(10).FontColor(Colors.White);
+                    var cityLine = string.Join(", ", new[] { businessProfile.Address.City, businessProfile.Address.State, businessProfile.Address.PostalCode }.Where(s => !string.IsNullOrEmpty(s)));
+                    if (!string.IsNullOrEmpty(cityLine))
+                        leftCol.Item().Text(cityLine).FontSize(10).FontColor(Colors.White);
+                    if (!string.IsNullOrEmpty(businessProfile.Address.Country))
+                        leftCol.Item().Text(businessProfile.Address.Country).FontSize(10).FontColor(Colors.White);
+                }
             });
 
             // Contact info and invoice details below colored header
