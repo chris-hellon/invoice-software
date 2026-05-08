@@ -1,0 +1,522 @@
+@page "/invoices/{Id:guid}/edit"
+
+@inject ICall<GetInvoice, InvoiceDetailDto> GetInvoiceCall
+@inject ICall<GetUnbilledTimeEntries, List<UnbilledTimeEntryDto>> GetUnbilledTimeEntriesCall
+@inject ICall<GetUnbilledExpenses, List<ExpenseSummaryDto>> GetUnbilledExpensesCall
+@inject ICall<UpdateInvoice> UpdateInvoiceCall
+
+<PageTitle>Edit Invoice - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header with Breadcrumbs -->
+    <PageHeader Title="Edit Invoice"
+                Description="@(_invoice != null ? _invoice.InvoiceNumber : "Loading...")"
+                ShowBackButton="true"
+                BackUrl="@($"invoices/{Id}")"
+                Breadcrumbs="@_breadcrumbs" />
+
+    @if (_isLoading)
+    {
+        <div class="flex justify-center py-20">
+            <div class="w-8 h-8 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+    }
+    else if (_invoice == null)
+    {
+        <div class="bg-white rounded-2xl border border-gray-100">
+            <div class="text-center py-16 px-6">
+                <div class="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+                     style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);">
+                    <svg class="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h3 class="text-base font-semibold text-gray-900">Invoice not found</h3>
+                <p class="mt-1 text-sm text-gray-500">The requested invoice could not be found.</p>
+            </div>
+        </div>
+    }
+    else if (_invoice.Status != "Draft")
+    {
+        <div class="bg-white rounded-2xl border border-gray-100">
+            <div class="text-center py-16 px-6">
+                <div class="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+                     style="background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%);">
+                    <svg class="h-8 w-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <h3 class="text-base font-semibold text-gray-900">Invoice cannot be edited</h3>
+                <p class="mt-1 text-sm text-gray-500">Only draft invoices can be edited. This invoice has status: @_invoice.Status</p>
+                <div class="mt-6">
+                    <a href="invoices/@Id" class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+                       style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">
+                        View Invoice
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Invoice Details Form -->
+        <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);">
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-sm font-semibold text-gray-900">Invoice Details</h2>
+                </div>
+            </div>
+            <div class="p-6 space-y-5">
+                <!-- Client Info (readonly) -->
+                <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Client</div>
+                    <div class="text-sm font-medium text-gray-900">@_invoice.ClientName</div>
+                    @if (!string.IsNullOrEmpty(_invoice.ClientAddress))
+                    {
+                        <div class="text-sm text-gray-500 mt-1">@_invoice.ClientAddress</div>
+                    }
+                </div>
+
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Issue Date</label>
+                        <input type="date" @bind="_issueDate"
+                               class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
+                        <input type="date" @bind="_dueDate"
+                               class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Tax Rate (%)</label>
+                        <input type="number" step="0.01" @bind="_taxRate"
+                               class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                    <textarea @bind="_notes" rows="3" placeholder="Add any notes to appear on the invoice..."
+                              class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 resize-none"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Current Line Items -->
+        <div class="bg-white dark:bg-[#1a1827] rounded-2xl border border-gray-100 dark:border-[#2d2a4a] overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-[#2d2a4a] bg-gray-50/50 dark:bg-[#1a1827]/50">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);">
+                            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                        </div>
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Current Line Items</h2>
+                        <span class="text-xs text-gray-500 dark:text-slate-400">(@_lineItems.Count items)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr class="border-b border-gray-100 dark:border-[#2d2a4a]">
+                            <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Description</th>
+                            <th scope="col" class="px-4 py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider w-28">Qty</th>
+                            <th scope="col" class="px-4 py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider w-32">Rate</th>
+                            <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider w-32">Amount</th>
+                            <th scope="col" class="px-4 py-4 w-16"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-[#2d2a4a]">
+                        @foreach (var item in _lineItems)
+                        {
+                            <tr class="hover:bg-gray-50/50 dark:hover:bg-[#2d2a4a]/50 transition-colors">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm text-gray-900 dark:text-slate-100">@item.Description</div>
+                                    @if (item.Date.HasValue)
+                                    {
+                                        <div class="text-xs text-gray-500 dark:text-slate-400">@item.Date.Value.ToString("MMM d, yyyy")</div>
+                                    }
+                                </td>
+                                <td class="px-4 py-4 text-right">
+                                    <div class="text-sm text-gray-900 dark:text-slate-100">@item.Quantity.ToString("N2")</div>
+                                </td>
+                                <td class="px-4 py-4 text-right">
+                                    <div class="text-sm text-gray-500 dark:text-slate-400">@CurrencyExtensions.GetSymbol(_currency)@item.UnitPrice.ToString("N2")</div>
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <span class="text-sm font-semibold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(_currency)@item.LineTotal.ToString("N2")</span>
+                                </td>
+                                <td class="px-4 py-4">
+                                    <button @onclick="() => RemoveLineItem(item)" type="button"
+                                            class="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                        @if (_lineItems.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5" class="px-6 py-12 text-center">
+                                    <div class="text-gray-400 dark:text-slate-500">
+                                        <svg class="w-10 h-10 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
+                                        <p class="text-sm">No line items yet - add time entries below</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Add Time Entries Section -->
+        <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);">
+                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                    </div>
+                    <h2 class="text-sm font-semibold text-gray-900">Add Unbilled Time Entries</h2>
+                </div>
+            </div>
+
+            <TimeEntrySelector Entries="_allUnbilledEntries"
+                               Currency="@_currency"
+                               IsLoading="_isLoadingEntries"
+                               ShowAddPrefix="true"
+                               SelectedEntryIds="_selectedEntryIds"
+                               SelectedEntryIdsChanged="OnSelectionChanged" />
+        </div>
+
+        <!-- Add Expenses Section -->
+        <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
+                        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-sm font-semibold text-gray-900">Add Unbilled Expenses</h2>
+                </div>
+            </div>
+
+            <ExpenseSelector Expenses="_allUnbilledExpenses"
+                             Currency="@_currency"
+                             IsLoading="_isLoadingExpenses"
+                             ShowAddPrefix="true"
+                             SelectedExpenseIds="_selectedExpenseIds"
+                             SelectedExpenseIdsChanged="OnExpenseSelectionChanged" />
+        </div>
+
+        <!-- Summary -->
+        <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                <h2 class="text-sm font-semibold text-gray-900">Invoice Summary</h2>
+            </div>
+            <div class="p-6">
+                <dl class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <dt class="text-sm text-gray-600">Current items (@_lineItems.Count)</dt>
+                        <dd class="text-sm font-medium text-gray-900">@CurrencyExtensions.GetSymbol(_currency)@CurrentSubtotal.ToString("N2")</dd>
+                    </div>
+                    @if (_selectedEntryIds.Any())
+                    {
+                        <div class="flex justify-between items-center text-emerald-600">
+                            <dt class="text-sm">+ New time entries (@_selectedEntryIds.Count)</dt>
+                            <dd class="text-sm font-medium">+@CurrencyExtensions.GetSymbol(_currency)@SelectedEntriesTotal.ToString("N2")</dd>
+                        </div>
+                    }
+                    @if (_selectedExpenseIds.Any())
+                    {
+                        <div class="flex justify-between items-center text-amber-600">
+                            <dt class="text-sm">+ New expenses (@_selectedExpenseIds.Count)</dt>
+                            <dd class="text-sm font-medium">+@CurrencyExtensions.GetSymbol(_currency)@SelectedExpensesTotal.ToString("N2")</dd>
+                        </div>
+                    }
+                    <div class="flex justify-between items-center pt-2 border-t border-gray-100">
+                        <dt class="text-sm text-gray-600">Subtotal</dt>
+                        <dd class="text-sm font-medium text-gray-900">@CurrencyExtensions.GetSymbol(_currency)@Subtotal.ToString("N2")</dd>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <dt class="text-sm text-gray-600">Tax (@_taxRate%)</dt>
+                        <dd class="text-sm font-medium text-gray-900">@CurrencyExtensions.GetSymbol(_currency)@TaxAmount.ToString("N2")</dd>
+                    </div>
+                    <div class="flex justify-between items-center pt-3 border-t border-gray-100">
+                        <dt class="text-base font-semibold text-gray-900">Total</dt>
+                        <dd class="text-xl font-bold text-indigo-600">@CurrencyExtensions.GetSymbol(_currency)@Total.ToString("N2")</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="bg-red-50 border border-red-100 rounded-xl p-4">
+                <div class="flex gap-3">
+                    <svg class="h-5 w-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p class="text-sm text-red-700">@_errorMessage</p>
+                </div>
+            </div>
+        }
+
+        <!-- Actions -->
+        <div class="flex justify-end gap-3">
+            <a href="invoices/@Id" class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200">
+                Cancel
+            </a>
+            <button @onclick="SaveChanges" disabled="@_isSaving"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-white rounded-xl shadow-md transition-all duration-200 hover:shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md disabled:active:scale-100"
+                    style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">
+                @if (_isSaving)
+                {
+                    <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Saving...</span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Save Changes</span>
+                }
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private InvoiceDetailDto? _invoice;
+    private DateOnly _issueDate;
+    private DateOnly _dueDate;
+    private decimal _taxRate;
+    private string? _notes;
+    private string _currency = "USD";
+    private bool _isLoading = true;
+    private bool _isLoadingEntries;
+    private bool _isSaving;
+    private string? _errorMessage;
+    private List<PageHeader.BreadcrumbItem> _breadcrumbs = [];
+
+    private List<EditableLineItem> _lineItems = [];
+    private readonly List<Guid> _removedLineItemIds = [];
+
+    private List<UnbilledTimeEntryDto>? _allUnbilledEntries;
+    private HashSet<Guid> _selectedEntryIds = [];
+
+    private List<ExpenseSummaryDto>? _allUnbilledExpenses;
+    private HashSet<Guid> _selectedExpenseIds = [];
+    private bool _isLoadingExpenses;
+
+    private decimal CurrentSubtotal => _lineItems.Sum(li => li.LineTotal);
+    private decimal SelectedEntriesTotal => _allUnbilledEntries != null ? _allUnbilledEntries.Where(e => _selectedEntryIds.Contains(e.Id))
+        .Sum(e => e.Hours * e.HourlyRate) : 0;
+    private decimal SelectedExpensesTotal => _allUnbilledExpenses != null ? _allUnbilledExpenses.Where(e => _selectedExpenseIds.Contains(e.Id))
+        .Sum(e => e.Amount + e.TaxAmount) : 0;
+
+    private decimal Subtotal => CurrentSubtotal + SelectedEntriesTotal + SelectedExpensesTotal;
+    private decimal TaxAmount => Subtotal * (_taxRate / 100);
+    private decimal Total => Subtotal + TaxAmount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new PageHeader.BreadcrumbItem("Invoices", "/invoices"),
+            new PageHeader.BreadcrumbItem("Edit Invoice")
+        ];
+
+        try
+        {
+            _invoice = await GetInvoiceCall.Call(new GetInvoice { Id = Id });
+            if (_invoice != null)
+            {
+                _breadcrumbs[1] = new PageHeader.BreadcrumbItem($"Edit {_invoice.InvoiceNumber}");
+                _issueDate = _invoice.IssueDate;
+                _dueDate = _invoice.DueDate;
+                _taxRate = _invoice.TaxRate;
+                _notes = _invoice.Notes;
+                _currency = _invoice.Currency;
+
+                _lineItems = _invoice.LineItems.Select(li => new EditableLineItem
+                {
+                    Id = li.Id,
+                    JobId = li.JobId,
+                    JobName = li.JobName,
+                    ProjectName = li.ProjectName,
+                    SectionName = li.SectionName,
+                    Date = li.Date,
+                    Description = li.Description,
+                    Quantity = li.Quantity,
+                    UnitPrice = li.UnitPrice,
+                    Currency = li.Currency
+                }).ToList();
+
+                // Load unbilled time entries for this client
+                await LoadUnbilledEntries();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading invoice: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadUnbilledEntries()
+    {
+        if (_invoice == null) return;
+
+        _isLoadingEntries = true;
+        _isLoadingExpenses = true;
+        StateHasChanged();
+
+        try
+        {
+            var entries = await GetUnbilledTimeEntriesCall.Call(new GetUnbilledTimeEntries { ClientId = _invoice.ClientId });
+            _allUnbilledEntries = entries?.ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading unbilled time entries: {ex.Message}");
+            _allUnbilledEntries = [];
+        }
+        finally
+        {
+            _isLoadingEntries = false;
+        }
+
+        try
+        {
+            var expenses = await GetUnbilledExpensesCall.Call(new GetUnbilledExpenses { ClientId = _invoice.ClientId });
+            _allUnbilledExpenses = expenses?.ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading unbilled expenses: {ex.Message}");
+            _allUnbilledExpenses = [];
+        }
+        finally
+        {
+            _isLoadingExpenses = false;
+        }
+    }
+
+    private void OnSelectionChanged(HashSet<Guid> newSelection)
+    {
+        _selectedEntryIds = newSelection;
+        StateHasChanged();
+    }
+
+    private void OnExpenseSelectionChanged(HashSet<Guid> newSelection)
+    {
+        _selectedExpenseIds = newSelection;
+        StateHasChanged();
+    }
+
+    private void RemoveLineItem(EditableLineItem item)
+    {
+        _lineItems.Remove(item);
+        _removedLineItemIds.Add(item.Id);
+
+        // Add back to unbilled entries list so user can re-add if needed
+        if (item.Date.HasValue)
+        {
+            var unbilledEntry = new UnbilledTimeEntryDto(
+                item.Id,
+                item.JobId,
+                item.JobName,
+                item.ProjectName,
+                item.SectionName,
+                item.Date.Value,
+                item.Quantity,
+                item.UnitPrice,
+                item.Currency);
+
+            _allUnbilledEntries?.Add(unbilledEntry);
+        }
+    }
+
+    private async Task SaveChanges()
+    {
+        // Validate - must have at least one item (existing time entries, existing expenses, new time entries, or new expenses)
+        var hasExistingTimeEntries = _lineItems.Count > 0;
+        var hasExistingExpenses = _invoice?.ExpenseLineItems?.Count > 0;
+        var hasNewTimeEntries = _selectedEntryIds.Count > 0;
+        var hasNewExpenses = _selectedExpenseIds.Count > 0;
+
+        if (!hasExistingTimeEntries && !hasExistingExpenses && !hasNewTimeEntries && !hasNewExpenses)
+        {
+            _errorMessage = "Invoice must have at least one line item.";
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            var request = new UpdateInvoice
+            {
+                Id = Id,
+                IssueDate = _issueDate,
+                DueDate = _dueDate,
+                TaxRate = _taxRate,
+                Notes = _notes,
+                AddedTimeEntryIds = _selectedEntryIds.Count > 0 ? _selectedEntryIds.ToList() : null,
+                RemovedTimeEntryIds = _removedLineItemIds.Count > 0 ? _removedLineItemIds : null,
+                AddedExpenseIds = _selectedExpenseIds.Count > 0 ? _selectedExpenseIds.ToList() : null
+            };
+
+            await UpdateInvoiceCall.Call(request);
+            NavigationManager.NavigateTo($"invoices/{Id}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to save changes: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private class EditableLineItem
+    {
+        public Guid Id { get; init; }
+        public Guid JobId { get; init; }
+        public string JobName { get; init; } = "";
+        public string ProjectName { get; init; } = "";
+        public string? SectionName { get; init; }
+        public DateOnly? Date { get; init; }
+        public string Description { get; init; } = "";
+        public decimal Quantity { get; init; }
+        public decimal UnitPrice { get; init; }
+        public string Currency { get; init; } = "USD";
+        public decimal LineTotal => Quantity * UnitPrice;
+    }
+}

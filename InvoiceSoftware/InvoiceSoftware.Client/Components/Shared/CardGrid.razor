@@ -1,0 +1,13 @@
+@* Card grid wrapper with consistent styling *@
+
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-@Columns gap-5">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter]
+    public int Columns { get; set; } = 3;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

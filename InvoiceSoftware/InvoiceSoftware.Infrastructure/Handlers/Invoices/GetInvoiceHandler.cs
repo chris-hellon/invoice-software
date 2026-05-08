@@ -1,0 +1,165 @@
+using BlazorUtils.EasyApi;
+using BlazorUtils.EasyApi.Server;
+using InvoiceSoftware.Domain.Entities;
+using InvoiceSoftware.Infrastructure.Data;
+using InvoiceSoftware.Shared.Api.Invoices;
+using InvoiceSoftware.Shared.Dtos.Invoices;
+using InvoiceSoftware.Shared.Dtos.InvoiceTemplates;
+using Microsoft.EntityFrameworkCore;
+
+using Expense = InvoiceSoftware.Domain.Entities.Expense;
+
+namespace InvoiceSoftware.Infrastructure.Handlers.Invoices;
+
+public class GetInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbFactory) : IHandle<GetInvoice, InvoiceDetailDto?>
+{
+    public async Task<HttpResult<InvoiceDetailDto?>> Handle(GetInvoice request, CancellationToken cancellationToken)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var invoice = await db.Invoices
+            .Include(i => i.Client)
+            .Include(i => i.Template)
+            .FirstOrDefaultAsync(i => i.Id == request.Id, cancellationToken);
+
+        if (invoice is null) return HttpResult<InvoiceDetailDto?>.NotFound();
+
+        var timeEntries = await db.TimeEntries
+            .Include(e => e.Job)
+                .ThenInclude(j => j.Project)
+                    .ThenInclude(p => p.Client)
+            .Include(e => e.Job)
+                .ThenInclude(j => j.Section)
+            .Where(e => e.InvoiceId == request.Id)
+            .ToListAsync(cancellationToken);
+
+        var expenses = await db.Expenses
+            .Include(e => e.Project)
+            .Where(e => e.InvoiceId == request.Id)
+            .ToListAsync(cancellationToken);
+
+        var (subtotal, taxAmount, total) = CalculateInvoiceTotals(timeEntries, expenses, invoice.TaxRate);
+
+        var clientAddress = invoice.Client.BillingAddress != null
+            ? $"{invoice.Client.BillingAddress.Street1}, {invoice.Client.BillingAddress.City}, {invoice.Client.BillingAddress.State} {invoice.Client.BillingAddress.PostalCode}"
+            : null;
+
+        var lineItems = timeEntries.Select(e =>
+        {
+            var jobName = e.Job.Name;
+            var projectName = e.Job.Project.Name;
+            var sectionName = e.Job.Section?.Name;
+            var description = e.Description ?? jobName;
+            if (!string.IsNullOrEmpty(projectName))
+            {
+                description = $"{projectName}: {description}";
+            }
+            var hourlyRate = e.Job.GetEffectiveHourlyRate();
+            var billableHours = RoundToQuarterHour(e.Hours.Value);
+            var lineTotal = billableHours * hourlyRate;
+            var entryCurrency = e.Job.Project.Client.Currency;
+
+            return new InvoiceLineItemDto(
+                e.Id,
+                e.JobId,
+                jobName,
+                projectName,
+                sectionName,
+                e.Date,
+                description,
+                billableHours,
+                hourlyRate,
+                lineTotal,
+                entryCurrency);
+        }).ToList();
+
+        var expenseLineItems = expenses.Select(e =>
+        {
+            var description = e.Notes ?? e.MerchantName;
+            var lineTotal = e.GetTotalAmount();
+
+            return new InvoiceExpenseLineItemDto(
+                e.Id,
+                e.Category.ToString(),
+                e.MerchantName,
+                e.ExpenseDate,
+                description,
+                e.Amount.Amount,
+                e.TaxAmount,
+                lineTotal,
+                e.Amount.Currency,
+                e.Project?.Name);
+        }).ToList();
+
+        // Map template to DTO if present
+        InvoiceTemplateDto? templateDto = null;
+        if (invoice.Template != null)
+        {
+            var t = invoice.Template;
+            templateDto = new InvoiceTemplateDto(
+                t.Id,
+                t.Name,
+                t.Description,
+                t.IsDefault,
+                t.IsSystem,
+                t.TemplateType.ToString(),
+                t.PrimaryColor,
+                t.AccentColor,
+                t.TextColor,
+                t.BackgroundColor,
+                t.ShowLogo,
+                t.ShowPaymentQR,
+                t.ShowBankDetails,
+                t.ShowItemDescriptions,
+                t.HeaderLayout.ToString(),
+                t.ItemsLayout.ToString(),
+                t.FooterLayout.ToString(),
+                t.FontFamily,
+                t.CustomCss);
+        }
+
+        var result = new InvoiceDetailDto(
+            invoice.Id,
+            invoice.InvoiceNumber,
+            invoice.ClientId,
+            invoice.Client.Name,
+            invoice.Client.CompanyName,
+            invoice.Client.Email.Value,
+            clientAddress,
+            invoice.Currency,
+            invoice.IssueDate,
+            invoice.DueDate,
+            invoice.PaidDate,
+            invoice.Status.ToString(),
+            subtotal,
+            invoice.TaxRate,
+            taxAmount,
+            total,
+            invoice.Notes,
+            lineItems,
+            expenseLineItems,
+            invoice.PublicAccessToken,
+            invoice.TemplateId,
+            templateDto);
+
+        return HttpResult<InvoiceDetailDto?>.Ok(result);
+    }
+
+    private static (decimal Subtotal, decimal TaxAmount, decimal Total) CalculateInvoiceTotals(
+        List<TimeEntry> timeEntries, List<Expense> expenses, decimal taxRate)
+    {
+        var timeSubtotal = timeEntries.Sum(e => RoundToQuarterHour(e.Hours.Value) * e.Job.GetEffectiveHourlyRate());
+        var expenseSubtotal = expenses.Sum(e => e.GetTotalAmount());
+        var subtotal = timeSubtotal + expenseSubtotal;
+        var taxAmount = subtotal * (taxRate / 100);
+        var total = subtotal + taxAmount;
+        return (subtotal, taxAmount, total);
+    }
+
+    /// <summary>
+    /// Rounds hours to nearest 0.25 (15-minute) increment for billing.
+    /// </summary>
+    private static decimal RoundToQuarterHour(decimal hours)
+    {
+        return Math.Round(hours * 4, MidpointRounding.AwayFromZero) / 4;
+    }
+}

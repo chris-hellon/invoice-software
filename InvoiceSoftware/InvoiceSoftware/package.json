@@ -1,0 +1,11 @@
+{
+  "name": "invoicesoftware",
+  "version": "1.0.0",
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  },
+  "scripts": {
+    "css:build": "npx tailwindcss -i ./wwwroot/css/input.css -o ./wwwroot/css/shared.css --minify",
+    "css:watch": "npx tailwindcss -i ./wwwroot/css/input.css -o ./wwwroot/css/shared.css --watch"
+  }
+}

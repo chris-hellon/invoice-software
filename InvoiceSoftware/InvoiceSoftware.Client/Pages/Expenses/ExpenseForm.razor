@@ -1,0 +1,469 @@
+@page "/expenses/new"
+@page "/expenses/{Id:guid}/edit"
+
+@inject ICall<GetClients, PaginatedResponse<ClientDto>> GetClientsCall
+@inject ICall<GetProjects, PaginatedResponse<ProjectDto>> GetProjectsCall
+@inject ICall<GetExpense, ExpenseDetailDto> GetExpenseCall
+@inject ICall<CreateExpense, Guid> CreateExpenseCall
+@inject ICall<UpdateExpense> UpdateExpenseCall
+@inject ICall<GetBusinessProfile, BusinessProfileDto?> GetBusinessProfileCall
+
+<PageTitle>@(Id.HasValue ? "Edit Expense" : "New Expense") - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <PageHeader Title="@(Id.HasValue ? "Edit Expense" : "New Expense")"
+                Description="@(Id.HasValue ? "Update expense details" : "Record a new business expense")"
+                ShowBackButton="true"
+                BackUrl="expenses"
+                Breadcrumbs="@_breadcrumbs" />
+
+    @if (_isLoading)
+    {
+        <div class="flex justify-center py-20">
+            <div class="w-8 h-8 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit" class="space-y-6">
+            <DataAnnotationsValidator />
+
+            <!-- Basic Details Section -->
+            <div class="card overflow-hidden">
+                <div class="card-header">
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Expense Details</h2>
+                    <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Basic information about this expense.</p>
+                </div>
+                <div class="p-6 space-y-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                            <label for="category" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Category <span class="text-red-500">*</span></label>
+                            <InputSelect id="category" @bind-Value="_model.Category"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500 cursor-pointer">
+                                @foreach (var category in Enum.GetValues<ExpenseCategory>())
+                                {
+                                    <option value="@category.ToString()">@category.GetDisplayName()</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div>
+                            <label for="expenseDate" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Date <span class="text-red-500">*</span></label>
+                            <InputDate id="expenseDate" @bind-Value="_model.ExpenseDate"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                            <ValidationMessage For="@(() => _model.ExpenseDate)" class="mt-1.5 text-xs text-red-600" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="merchantName" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Merchant Name <span class="text-red-500">*</span></label>
+                        <InputText id="merchantName" @bind-Value="_model.MerchantName"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                            placeholder="e.g., Amazon, Starbucks" />
+                        <ValidationMessage For="@(() => _model.MerchantName)" class="mt-1.5 text-xs text-red-600" />
+                    </div>
+
+                    <div>
+                        <label for="paymentMethod" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Payment Method <span class="text-red-500">*</span></label>
+                        <InputSelect id="paymentMethod" @bind-Value="_model.PaymentMethod"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500 cursor-pointer">
+                            @foreach (var method in Enum.GetValues<PaymentMethod>())
+                            {
+                                <option value="@method.ToString()">@method.GetDisplayName()</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label for="groupName" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Group / Tag</label>
+                        <InputText id="groupName" @bind-Value="_model.GroupName"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                            placeholder="e.g., Q1 Travel, Conference" />
+                        <p class="mt-1.5 text-xs text-gray-500 dark:text-slate-400">Group related expenses together for easier tracking.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Amount & Tax Section -->
+            <div class="card overflow-hidden">
+                <div class="card-header">
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Amount & Tax</h2>
+                    <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Expense amount and tax details.</p>
+                </div>
+                <div class="p-6 space-y-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                            <label for="amount" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Amount <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <span class="text-gray-500 dark:text-slate-400 text-sm">@CurrencyExtensions.GetSymbol(_model.Currency)</span>
+                                </div>
+                                <InputNumber id="amount" @bind-Value="_model.Amount"
+                                    class="w-full pl-8 pr-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                            </div>
+                            <ValidationMessage For="@(() => _model.Amount)" class="mt-1.5 text-xs text-red-600" />
+                        </div>
+
+                        <div>
+                            <label for="currency" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Currency</label>
+                            <InputSelect id="currency" @bind-Value="_model.Currency"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500 cursor-pointer">
+                                @foreach (var currency in Enum.GetValues<Currency>())
+                                {
+                                    <option value="@currency.ToString()">@currency.GetDisplayName()</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                            <label for="taxAmount" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Tax Amount</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <span class="text-gray-500 dark:text-slate-400 text-sm">@CurrencyExtensions.GetSymbol(_model.Currency)</span>
+                                </div>
+                                <InputNumber id="taxAmount" @bind-Value="_model.TaxAmount"
+                                    class="w-full pl-8 pr-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                            </div>
+                        </div>
+
+                        <div class="flex items-center pt-8">
+                            <InputCheckbox id="isTaxInclusive" @bind-Value="_model.IsTaxInclusive"
+                                class="h-4 w-4 text-indigo-600 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500" />
+                            <label for="isTaxInclusive" class="ml-3 text-sm text-gray-700 dark:text-slate-300">Tax is included in amount</label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="merchantTaxNumber" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Merchant Tax Number</label>
+                        <InputText id="merchantTaxNumber" @bind-Value="_model.MerchantTaxNumber"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                            placeholder="e.g., VAT number, GST number" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Billing Section -->
+            <div class="card overflow-hidden">
+                <div class="card-header">
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Billing</h2>
+                    <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Link expense to a client for billing.</p>
+                </div>
+                <div class="p-6 space-y-5">
+                    <div class="flex items-center gap-6">
+                        <div class="flex items-center">
+                            <InputCheckbox id="isReimbursable" @bind-Value="_model.IsReimbursable"
+                                class="h-4 w-4 text-indigo-600 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500" />
+                            <label for="isReimbursable" class="ml-3 text-sm text-gray-700 dark:text-slate-300">Reimbursable</label>
+                        </div>
+                        <div class="flex items-center">
+                            <InputCheckbox id="isBillable" @bind-Value="_model.IsBillable" @bind-Value:after="OnBillableChanged"
+                                class="h-4 w-4 text-indigo-600 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500" />
+                            <label for="isBillable" class="ml-3 text-sm text-gray-700 dark:text-slate-300">Billable to Client</label>
+                        </div>
+                    </div>
+
+                    @if (_model.IsBillable)
+                    {
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                                <label for="clientId" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Client <span class="text-red-500">*</span></label>
+                                <InputSelect id="clientId" @bind-Value="_model.ClientId" @bind-Value:after="OnClientChanged"
+                                    class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500 cursor-pointer">
+                                    <option value="">Select a client...</option>
+                                    @if (_clients != null)
+                                    {
+                                        @foreach (var client in _clients)
+                                        {
+                                            <option value="@client.Id">@client.Name</option>
+                                        }
+                                    }
+                                </InputSelect>
+                            </div>
+
+                            <div>
+                                <label for="projectId" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Project</label>
+                                <InputSelect id="projectId" @bind-Value="_model.ProjectId"
+                                    class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500 cursor-pointer">
+                                    <option value="">Select a project...</option>
+                                    @if (_filteredProjects != null)
+                                    {
+                                        @foreach (var project in _filteredProjects)
+                                        {
+                                            <option value="@project.Id">@project.Name</option>
+                                        }
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Notes Section -->
+            <div class="card overflow-hidden">
+                <div class="card-header">
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Notes</h2>
+                    <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Additional notes or comments.</p>
+                </div>
+                <div class="p-6">
+                    <InputTextArea id="notes" @bind-Value="_model.Notes" rows="4"
+                        class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500 resize-none"
+                        placeholder="Any additional notes about this expense..." />
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 p-4">
+                    <div class="flex gap-3">
+                        <svg class="h-5 w-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p class="text-sm text-red-700 dark:text-red-400">@_errorMessage</p>
+                    </div>
+                </div>
+            }
+
+            <!-- Actions -->
+            <div class="flex items-center justify-end gap-3 pt-4">
+                <a href="expenses" class="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-gray-300 dark:hover:border-slate-500 transition-all duration-200">
+                    Cancel
+                </a>
+                <button type="submit" disabled="@_isSaving"
+                    class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+                    style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">
+                    @if (_isSaving)
+                    {
+                        <svg class="animate-spin -ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    }
+                    @(Id.HasValue ? "Save Changes" : "Create Expense")
+                </button>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private ExpenseFormModel _model = new();
+    private List<ClientDto>? _clients;
+    private List<ProjectDto>? _projects;
+    private List<ProjectDto>? _filteredProjects;
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private string? _errorMessage;
+    private List<PageHeader.BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new PageHeader.BreadcrumbItem("Expenses", "/expenses"),
+            new PageHeader.BreadcrumbItem(Id.HasValue ? "Edit Expense" : "New Expense")
+        ];
+
+        try
+        {
+            var clientsResponse = await GetClientsCall.Call(new GetClients { PageSize = 1000 });
+            _clients = clientsResponse?.Items ?? [];
+
+            var projectsResponse = await GetProjectsCall.Call(new GetProjects { PageSize = 1000 });
+            _projects = projectsResponse?.Items ?? [];
+
+            // Load business profile to get default currency
+            var businessProfile = await GetBusinessProfileCall.Call(new GetBusinessProfile());
+
+            if (Id.HasValue)
+            {
+                var expense = await GetExpenseCall.Call(new GetExpense { Id = Id.Value });
+                if (expense != null)
+                {
+                    _model = new ExpenseFormModel
+                    {
+                        Category = expense.Category,
+                        MerchantName = expense.MerchantName,
+                        ExpenseDate = expense.ExpenseDate,
+                        PaymentMethod = expense.PaymentMethod,
+                        Amount = expense.Amount,
+                        Currency = expense.Currency,
+                        TaxAmount = expense.TaxAmount,
+                        IsTaxInclusive = expense.IsTaxInclusive,
+                        MerchantTaxNumber = expense.MerchantTaxNumber,
+                        GroupName = expense.GroupName,
+                        Notes = expense.Notes,
+                        IsReimbursable = expense.IsReimbursable,
+                        IsBillable = expense.IsBillable,
+                        ClientId = expense.ClientId,
+                        ProjectId = expense.ProjectId
+                    };
+                    UpdateFilteredProjects();
+                }
+            }
+            else
+            {
+                _model.ExpenseDate = DateOnly.FromDateTime(DateTime.Today);
+                // Set default currency from business profile
+                if (businessProfile != null)
+                {
+                    _model.Currency = businessProfile.DefaultCurrency;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load data: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnBillableChanged()
+    {
+        if (!_model.IsBillable)
+        {
+            _model.ClientId = null;
+            _model.ProjectId = null;
+            _filteredProjects = null;
+        }
+    }
+
+    private void OnClientChanged()
+    {
+        _model.ProjectId = null;
+        UpdateFilteredProjects();
+    }
+
+    private void UpdateFilteredProjects()
+    {
+        if (_model.ClientId.HasValue && _projects != null)
+        {
+            _filteredProjects = _projects.Where(p => p.ClientId == _model.ClientId.Value).ToList();
+        }
+        else
+        {
+            _filteredProjects = null;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (_model.IsBillable && !_model.ClientId.HasValue)
+        {
+            _errorMessage = "Please select a client for billable expenses.";
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (Id.HasValue)
+            {
+                await UpdateExpenseCall.Call(new UpdateExpense
+                {
+                    Id = Id.Value,
+                    Category = _model.Category,
+                    MerchantName = _model.MerchantName,
+                    ExpenseDate = _model.ExpenseDate,
+                    PaymentMethod = _model.PaymentMethod,
+                    Amount = _model.Amount,
+                    Currency = _model.Currency,
+                    TaxAmount = _model.TaxAmount,
+                    IsTaxInclusive = _model.IsTaxInclusive,
+                    MerchantTaxNumber = _model.MerchantTaxNumber,
+                    GroupName = _model.GroupName,
+                    Notes = _model.Notes,
+                    IsReimbursable = _model.IsReimbursable,
+                    IsBillable = _model.IsBillable,
+                    ClientId = _model.ClientId,
+                    ProjectId = _model.ProjectId
+                });
+            }
+            else
+            {
+                await CreateExpenseCall.Call(new CreateExpense
+                {
+                    Category = _model.Category,
+                    MerchantName = _model.MerchantName,
+                    ExpenseDate = _model.ExpenseDate,
+                    PaymentMethod = _model.PaymentMethod,
+                    Amount = _model.Amount,
+                    Currency = _model.Currency,
+                    TaxAmount = _model.TaxAmount,
+                    IsTaxInclusive = _model.IsTaxInclusive,
+                    MerchantTaxNumber = _model.MerchantTaxNumber,
+                    GroupName = _model.GroupName,
+                    Notes = _model.Notes,
+                    IsReimbursable = _model.IsReimbursable,
+                    IsBillable = _model.IsBillable,
+                    ClientId = _model.ClientId,
+                    ProjectId = _model.ProjectId
+                });
+            }
+            NavigationManager.NavigateTo("expenses");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    public class ExpenseFormModel
+    {
+        [Required]
+        public string Category { get; set; } = "Other";
+
+        [Required(ErrorMessage = "Merchant name is required")]
+        [StringLength(200)]
+        public string MerchantName { get; set; } = "";
+
+        [Required]
+        public DateOnly ExpenseDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+        [Required]
+        public string PaymentMethod { get; set; } = "CreditCard";
+
+        [Required]
+        [Range(0.01, 1000000, ErrorMessage = "Amount must be greater than 0")]
+        public decimal Amount { get; set; }
+
+        public string Currency { get; set; } = "USD";
+
+        [Range(0, 1000000)]
+        public decimal TaxAmount { get; set; }
+
+        public bool IsTaxInclusive { get; set; }
+
+        [StringLength(100)]
+        public string? MerchantTaxNumber { get; set; }
+
+        [StringLength(200)]
+        public string? GroupName { get; set; }
+
+        [StringLength(2000)]
+        public string? Notes { get; set; }
+
+        public bool IsReimbursable { get; set; }
+
+        public bool IsBillable { get; set; }
+
+        public Guid? ClientId { get; set; }
+
+        public Guid? ProjectId { get; set; }
+    }
+}

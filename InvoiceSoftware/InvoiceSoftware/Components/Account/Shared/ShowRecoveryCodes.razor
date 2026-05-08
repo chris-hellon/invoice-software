@@ -1,0 +1,45 @@
+<div class="space-y-6">
+    <div>
+        <h2 class="text-lg font-semibold text-gray-900">Recovery Codes</h2>
+        <p class="mt-1 text-sm text-gray-500">Save these codes securely - you'll need them if you lose your authenticator.</p>
+    </div>
+
+    <StatusMessage Message="@StatusMessage" />
+
+    <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <div class="flex gap-3">
+            <svg class="h-5 w-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+                <p class="text-sm font-medium text-amber-800">Put these codes in a safe place.</p>
+                <p class="mt-1 text-sm text-amber-700">If you lose your device and don't have the recovery codes you will lose access to your account.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-gray-50 rounded-xl border border-gray-200 p-6">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            @foreach (var recoveryCode in RecoveryCodes)
+            {
+                <div class="p-3 bg-white rounded-lg border border-gray-200 text-center">
+                    <code class="text-sm font-mono text-gray-900">@recoveryCode</code>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+        <a href="account/manage/two-factor-authentication"
+            class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+            style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">
+            Done
+        </a>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string[] RecoveryCodes { get; set; } = [];
+
+    [Parameter] public string? StatusMessage { get; set; }
+}

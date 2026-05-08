@@ -1,0 +1,201 @@
+@inject ICall<GetBusinessProfile, BusinessProfileDto> GetBusinessProfileCall
+
+<div class="space-y-6">
+    @if (_isLoading)
+    {
+        <div class="flex justify-center py-8">
+            <div class="w-8 h-8 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+    }
+    else
+    {
+        <!-- Email Icon -->
+        <div class="flex justify-center">
+            <div class="w-16 h-16 rounded-full flex items-center justify-center"
+                 style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);">
+                <svg class="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+            </div>
+        </div>
+
+        <!-- Form Fields -->
+        <div class="space-y-4">
+            <!-- To Email -->
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">To</label>
+                <input type="email" id="email" @bind="Email" @bind:event="oninput"
+                    class="w-full px-4 py-2.5 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10" />
+            </div>
+
+            <!-- Subject -->
+            <div>
+                <label for="subject" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Subject</label>
+                <input type="text" id="subject" @bind="Subject" @bind:event="oninput"
+                    class="w-full px-4 py-2.5 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10" />
+            </div>
+
+            <!-- Body -->
+            <div>
+                <label for="body" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Message</label>
+                <textarea id="body" @bind="Body" @bind:event="oninput" rows="8"
+                    class="w-full px-4 py-2.5 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 resize-none"></textarea>
+            </div>
+
+            <!-- Attachment Info -->
+            <div class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-[#2d2a4a]/30 rounded-xl">
+                <svg class="w-5 h-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+                <span class="text-sm text-gray-600 dark:text-slate-400">
+                    <span class="font-medium">@(InvoiceNumber).pdf</span> will be attached
+                </span>
+            </div>
+
+            <!-- View HTML Template -->
+            <div class="flex items-center justify-between p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-xl">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    <span class="text-sm text-indigo-700 dark:text-indigo-300">
+                        Preview HTML email template for manual sending
+                    </span>
+                </div>
+                <a href="/invoice/@InvoiceId/email-template" target="_blank"
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-white dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span>View Template</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end gap-3 pt-2">
+            <button @onclick="Cancel"
+                    class="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors">
+                Cancel
+            </button>
+            <button @onclick="Send"
+                    disabled="@(_isSending || string.IsNullOrWhiteSpace(Email))"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">
+                @if (_isSending)
+                {
+                    <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Sending...</span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    <span>Send Invoice</span>
+                }
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid InvoiceId { get; set; }
+    [Parameter] public string InvoiceNumber { get; set; } = "";
+    [Parameter] public string ClientName { get; set; } = "";
+    [Parameter] public string ClientEmail { get; set; } = "";
+    [Parameter] public string Currency { get; set; } = "USD";
+    [Parameter] public decimal Amount { get; set; }
+    [Parameter] public DateOnly DueDate { get; set; }
+    [Parameter] public Guid? PublicAccessToken { get; set; }
+
+    public string Email { get; set; } = "";
+    public string Subject { get; set; } = "";
+    public string Body { get; set; } = "";
+
+    private bool _isLoading = true;
+    private bool _isSending;
+    private string _companyName = "Your Company";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Email = ClientEmail;
+        await LoadEmailTemplate();
+        _isLoading = false;
+    }
+
+    private async Task LoadEmailTemplate()
+    {
+        try
+        {
+            var profile = await GetBusinessProfileCall.Call(new GetBusinessProfile());
+
+            // Get template or use defaults
+            var subjectTemplate = profile?.InvoiceEmailSubject ?? "Invoice {InvoiceNumber} from {CompanyName}";
+            var bodyTemplate = profile?.InvoiceEmailBody ?? GetDefaultEmailBody();
+            _companyName = profile?.CompanyName ?? "Your Company";
+
+            // Replace placeholders
+            var currencySymbol = CurrencyExtensions.GetSymbol(Currency);
+
+            Subject = ReplacePlaceholders(subjectTemplate, _companyName, currencySymbol);
+            Body = ReplacePlaceholders(bodyTemplate, _companyName, currencySymbol);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading email template: {ex.Message}");
+            Subject = $"Invoice {InvoiceNumber}";
+            Body = GetDefaultEmailBody();
+        }
+    }
+
+    private string ReplacePlaceholders(string template, string companyName, string currencySymbol)
+    {
+        var viewOnlineLink = GetViewOnlineLink();
+
+        return template
+            .Replace("{InvoiceNumber}", InvoiceNumber)
+            .Replace("{ClientName}", ClientName)
+            .Replace("{Amount}", $"{currencySymbol}{Amount:N2}")
+            .Replace("{DueDate}", DueDate.ToString("MMMM d, yyyy"))
+            .Replace("{CompanyName}", companyName)
+            .Replace("{ViewOnlineLink}", viewOnlineLink);
+    }
+
+    private string GetViewOnlineLink()
+    {
+        if (PublicAccessToken == null)
+            return "";
+
+        // Get the base URL from NavigationManager
+        var baseUri = NavigationManager.BaseUri.TrimEnd('/');
+        return $"{baseUri}/invoice/view/{PublicAccessToken}";
+    }
+
+    private string GetDefaultEmailBody()
+    {
+        var viewOnlineLink = GetViewOnlineLink();
+        var viewOnlineSection = !string.IsNullOrEmpty(viewOnlineLink)
+            ? $"\n\nView this invoice online: {viewOnlineLink}\n"
+            : "";
+
+        return $@"Dear {ClientName},
+
+Please find attached invoice {InvoiceNumber} for {CurrencyExtensions.GetSymbol(Currency)}{Amount:N2}.
+
+Payment is due by {DueDate:MMMM d, yyyy}.{viewOnlineSection}
+Thank you for your business.";
+    }
+
+    private void Cancel()
+    {
+        ModalService.Close<SendInvoiceResult?>(null);
+    }
+
+    private void Send()
+    {
+        _isSending = true;
+        var result = new SendInvoiceResult(Email, Subject, Body);
+        ModalService.Close(result);
+    }
+}

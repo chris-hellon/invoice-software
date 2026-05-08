@@ -1,0 +1,446 @@
+@page "/bank-import"
+
+@inject ICall<ImportBankStatement, ImportResultDto> ImportStatementCall
+@inject ICall<GetBankTransactions, PaginatedResponse<BankTransactionDto>> GetTransactionsCall
+@inject ICall<MatchTransaction> MatchTransactionCall
+@inject ICall<IgnoreTransaction> IgnoreTransactionCall
+@inject ICall<GetSuggestedMatches, List<TransactionMatchDto>> GetSuggestionsCall
+
+<PageTitle>Bank Import - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <PageHeader Title="Bank Import"
+                Description="Import bank statements and match transactions to invoices."
+                Breadcrumbs="@(new List<PageHeader.BreadcrumbItem> { new("Bank Import") })">
+        <Actions>
+            <label class="cursor-pointer">
+                <input type="file" accept=".csv,.ofx" class="hidden" @onchange="HandleFileUpload" />
+                <span class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Import Statement
+                </span>
+            </label>
+        </Actions>
+    </PageHeader>
+
+    @if (_importResult != null)
+    {
+        <Card>
+            <div class="flex items-start gap-4">
+                <div class="flex-shrink-0 w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
+                    <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Import Complete</h3>
+                    <div class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-500 dark:text-slate-400">Total:</span>
+                            <span class="ml-1 font-medium text-gray-900 dark:text-slate-100">@_importResult.TotalTransactions</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-slate-400">Imported:</span>
+                            <span class="ml-1 font-medium text-emerald-600 dark:text-emerald-400">@_importResult.ImportedTransactions</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-slate-400">Auto-matched:</span>
+                            <span class="ml-1 font-medium text-indigo-600 dark:text-indigo-400">@_importResult.AutoMatchedTransactions</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-slate-400">Skipped:</span>
+                            <span class="ml-1 font-medium text-gray-600 dark:text-slate-400">@_importResult.SkippedDuplicates</span>
+                        </div>
+                    </div>
+                    @if (_importResult.Errors.Any())
+                    {
+                        <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                            <p class="text-sm font-medium text-red-700 dark:text-red-400">Errors:</p>
+                            <ul class="mt-1 list-disc list-inside text-sm text-red-600 dark:text-red-400">
+                                @foreach (var error in _importResult.Errors.Take(5))
+                                {
+                                    <li>@error</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+                <button @onclick="() => _importResult = null" class="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </Card>
+    }
+
+    <!-- Filters -->
+    <div class="flex flex-wrap items-center gap-4">
+        <div class="flex-1 min-w-[200px]">
+            <input type="text" @bind="_searchTerm" @bind:after="OnFilterChanged" placeholder="Search transactions..."
+                   class="w-full px-4 py-2.5 text-sm bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:ring-2 focus:ring-indigo-500/20 text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400" />
+        </div>
+        <select @bind="_selectedStatus" @bind:after="OnFilterChanged" class="py-2.5 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="">All Status</option>
+            <option value="unmatched">Unmatched</option>
+            <option value="matched">Matched</option>
+            <option value="ignored">Ignored</option>
+        </select>
+    </div>
+
+    @if (_isLoading)
+    {
+        <LoadingTable Rows="5" Columns="6" />
+    }
+    else if (_response == null || !_response.Items.Any())
+    {
+        <EmptyState Title="No transactions found"
+                    Message="@(HasActiveFilters ? "No transactions match your filters." : "Import a bank statement to get started.")"
+                    IconType="EmptyState.EmptyStateIcon.Briefcase" />
+    }
+    else
+    {
+        <DataTable TItem="BankTransactionDto"
+                   Items="_response.Items"
+                   CurrentPage="_response.Page"
+                   TotalCount="_response.TotalCount"
+                   PageSize="_response.PageSize"
+                   ItemName="transactions"
+                   OnPageChanged="OnPageChanged">
+            <HeaderTemplate>
+                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Description</th>
+                <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Amount</th>
+                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Match</th>
+                <th scope="col" class="relative px-6 py-4"><span class="sr-only">Actions</span></th>
+            </HeaderTemplate>
+            <RowTemplate Context="transaction">
+                <tr class="group hover:bg-gray-50/50 dark:hover:bg-[#2d2a4a]/50 transition-colors">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900 dark:text-slate-100">@transaction.TransactionDate.ToString("MMM d, yyyy")</div>
+                        <div class="text-xs text-gray-500 dark:text-slate-400">@transaction.SourceFileName</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm text-gray-900 dark:text-slate-100 max-w-xs truncate">@transaction.Description</div>
+                        @if (!string.IsNullOrEmpty(transaction.Reference))
+                        {
+                            <div class="text-xs text-gray-500 dark:text-slate-400">Ref: @transaction.Reference</div>
+                        }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                        <span class="text-sm font-semibold @(transaction.Amount >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")">
+                            @(transaction.Amount >= 0 ? "+" : "")@CurrencyExtensions.GetSymbol(transaction.Currency)@transaction.Amount.ToString("N2")
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        @if (transaction.IsIgnored)
+                        {
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400">Ignored</span>
+                        }
+                        else if (transaction.IsMatched)
+                        {
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Matched</span>
+                        }
+                        else
+                        {
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Unmatched</span>
+                        }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        @if (transaction.IsMatched && !string.IsNullOrEmpty(transaction.MatchedInvoiceNumber))
+                        {
+                            <a href="@($"invoices/{transaction.MatchedInvoiceId}")" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                                @transaction.MatchedInvoiceNumber
+                            </a>
+                            @if (!string.IsNullOrEmpty(transaction.MatchConfidence))
+                            {
+                                <span class="ml-1 text-xs text-gray-500 dark:text-slate-400">(@transaction.MatchConfidence)</span>
+                            }
+                        }
+                        else if (transaction.IsIgnored && !string.IsNullOrEmpty(transaction.IgnoreReason))
+                        {
+                            <span class="text-xs text-gray-500 dark:text-slate-400">@transaction.IgnoreReason</span>
+                        }
+                        else
+                        {
+                            <span class="text-sm text-gray-400 dark:text-slate-500">-</span>
+                        }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                        <div class="flex items-center justify-end gap-1">
+                            @if (!transaction.IsMatched && !transaction.IsIgnored)
+                            {
+                                <IconButton OnClick="() => ShowMatchModal(transaction)" Title="Match to Invoice">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                </IconButton>
+                                <IconButton OnClick="() => IgnoreTransactionAsync(transaction)" Title="Ignore">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                    </svg>
+                                </IconButton>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            </RowTemplate>
+        </DataTable>
+    }
+</div>
+
+<!-- Match Modal -->
+@if (_showMatchModal && _selectedTransaction != null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500/75 dark:bg-slate-900/75 transition-opacity" @onclick="CloseMatchModal"></div>
+
+            <div class="inline-block w-full max-w-2xl my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-slate-800 shadow-xl rounded-2xl">
+                <div class="px-6 py-5 border-b border-gray-100 dark:border-slate-700">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-100">Match Transaction</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                        @_selectedTransaction.Description - @CurrencyExtensions.GetSymbol(_selectedTransaction.Currency)@_selectedTransaction.Amount.ToString("N2")
+                    </p>
+                </div>
+
+                <div class="px-6 py-4 max-h-96 overflow-y-auto">
+                    @if (_isLoadingSuggestions)
+                    {
+                        <div class="flex justify-center py-8">
+                            <LoadingSpinner />
+                        </div>
+                    }
+                    else if (!_suggestions.Any())
+                    {
+                        <p class="text-center py-8 text-gray-500 dark:text-slate-400">No matching invoices found.</p>
+                    }
+                    else
+                    {
+                        <div class="space-y-3">
+                            @foreach (var suggestion in _suggestions)
+                            {
+                                <button @onclick="() => MatchToInvoiceAsync(suggestion.InvoiceId)"
+                                        class="w-full p-4 text-left bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-xl transition-colors">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-medium text-gray-900 dark:text-slate-100">@suggestion.InvoiceNumber</span>
+                                                <span class="px-2 py-0.5 text-xs rounded-full @GetConfidenceClass(suggestion.MatchConfidence)">
+                                                    @suggestion.MatchConfidence
+                                                </span>
+                                            </div>
+                                            <p class="text-sm text-gray-600 dark:text-slate-400">@suggestion.ClientName</p>
+                                            <p class="text-xs text-gray-500 dark:text-slate-500">@suggestion.MatchReason</p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-semibold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(suggestion.Currency)@suggestion.InvoiceTotal.ToString("N2")</p>
+                                            <p class="text-xs text-gray-500 dark:text-slate-400">Due @suggestion.DueDate.ToString("MMM d")</p>
+                                        </div>
+                                    </div>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="px-6 py-4 bg-gray-50 dark:bg-slate-700/50 flex justify-end gap-3">
+                    <button type="button" @onclick="CloseMatchModal"
+                            class="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-gray-300 dark:hover:border-slate-500 transition-all duration-200">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ErrorAlert Message="@_errorMessage" />
+
+@code {
+    private PaginatedResponse<BankTransactionDto>? _response;
+    private ImportResultDto? _importResult;
+    private bool _isLoading = true;
+    private bool _isUploading;
+    private string _searchTerm = "";
+    private string _selectedStatus = "";
+    private int _currentPage = 1;
+    private const int PageSize = 15;
+    private string? _errorMessage;
+
+    private bool _showMatchModal;
+    private BankTransactionDto? _selectedTransaction;
+    private List<TransactionMatchDto> _suggestions = new();
+    private bool _isLoadingSuggestions;
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_searchTerm) || !string.IsNullOrEmpty(_selectedStatus);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTransactions();
+    }
+
+    private async Task LoadTransactions()
+    {
+        _isLoading = true;
+        try
+        {
+            bool? isMatched = _selectedStatus switch
+            {
+                "matched" => true,
+                "unmatched" => false,
+                _ => null
+            };
+            bool? isIgnored = _selectedStatus == "ignored" ? true : null;
+
+            _response = await GetTransactionsCall.Call(new GetBankTransactions
+            {
+                Page = _currentPage,
+                PageSize = PageSize,
+                Search = _searchTerm,
+                IsMatched = isMatched,
+                IsIgnored = isIgnored
+            });
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load transactions: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task HandleFileUpload(ChangeEventArgs e)
+    {
+        if (e.Value is not Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+            return;
+
+        _isUploading = true;
+        _errorMessage = null;
+        try
+        {
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            var format = extension switch
+            {
+                ".csv" => "CSV",
+                ".ofx" => "OFX",
+                _ => throw new Exception("Unsupported file format. Please use CSV or OFX files.")
+            };
+
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+
+            _importResult = await ImportStatementCall.Call(new ImportBankStatement
+            {
+                FileContent = ms.ToArray(),
+                FileName = file.Name,
+                FileFormat = format,
+                Currency = "USD"
+            });
+
+            _currentPage = 1;
+            await LoadTransactions();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to import statement: {ex.Message}";
+        }
+        finally
+        {
+            _isUploading = false;
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        _currentPage = 1;
+        await LoadTransactions();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadTransactions();
+    }
+
+    private async Task ShowMatchModal(BankTransactionDto transaction)
+    {
+        _selectedTransaction = transaction;
+        _showMatchModal = true;
+        _suggestions = new();
+        _isLoadingSuggestions = true;
+
+        try
+        {
+            _suggestions = await GetSuggestionsCall.Call(new GetSuggestedMatches { Id = transaction.Id });
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load suggestions: {ex.Message}";
+        }
+        finally
+        {
+            _isLoadingSuggestions = false;
+        }
+    }
+
+    private void CloseMatchModal()
+    {
+        _showMatchModal = false;
+        _selectedTransaction = null;
+    }
+
+    private async Task MatchToInvoiceAsync(Guid invoiceId)
+    {
+        if (_selectedTransaction == null) return;
+
+        try
+        {
+            await MatchTransactionCall.Call(new MatchTransaction
+            {
+                Id = _selectedTransaction.Id,
+                InvoiceId = invoiceId,
+                MarkInvoiceAsPaid = true
+            });
+
+            CloseMatchModal();
+            await LoadTransactions();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to match transaction: {ex.Message}";
+        }
+    }
+
+    private async Task IgnoreTransactionAsync(BankTransactionDto transaction)
+    {
+        try
+        {
+            await IgnoreTransactionCall.Call(new IgnoreTransaction
+            {
+                Id = transaction.Id,
+                Reason = "Manually ignored"
+            });
+
+            await LoadTransactions();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to ignore transaction: {ex.Message}";
+        }
+    }
+
+    private static string GetConfidenceClass(string confidence) => confidence switch
+    {
+        "High" => "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+        "Medium" => "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+        "Low" => "bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-400",
+        _ => "bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400"
+    };
+}

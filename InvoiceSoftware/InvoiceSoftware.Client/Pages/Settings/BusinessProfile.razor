@@ -1,0 +1,259 @@
+@page "/settings/business"
+
+@inject ICall<GetBusinessProfile, BusinessProfileDto> GetBusinessProfileCall
+@inject ICall<SaveBusinessProfile> SaveBusinessProfileCall
+
+<PageTitle>Business Profile - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <PageHeader Title="Business Profile"
+                Description="Configure your company details for invoices."
+                Breadcrumbs="@(new List<PageHeader.BreadcrumbItem> { new("Settings"), new("Business Profile") })" />
+
+    @if (_isLoading)
+    {
+        <LoadingSpinner Padding="py-20" />
+    }
+    else
+    {
+        <EditForm Model="Input" OnValidSubmit="OnValidSubmitAsync" class="space-y-6">
+            <DataAnnotationsValidator />
+
+            @if (!string.IsNullOrEmpty(_statusMessage))
+            {
+                <div class="@(_isError ? "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300" : "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300") p-4 border rounded-xl text-sm">
+                    @_statusMessage
+                </div>
+            }
+
+            <!-- Company Information -->
+            <Card Title="Company Information">
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label for="CompanyName" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Company Name <span class="text-red-500">*</span></label>
+                            <InputText @bind-Value="Input.CompanyName" id="CompanyName"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                                placeholder="Your Company Ltd" />
+                            <ValidationMessage For="() => Input.CompanyName" class="mt-1.5 text-xs text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                            <label for="TradingName" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Trading Name</label>
+                            <InputText @bind-Value="Input.TradingName" id="TradingName"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                                placeholder="If different from company name" />
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label for="Email" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Business Email <span class="text-red-500">*</span></label>
+                            <InputText @bind-Value="Input.Email" id="Email" type="email"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                                placeholder="billing@yourcompany.com" />
+                            <ValidationMessage For="() => Input.Email" class="mt-1.5 text-xs text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                            <label for="Phone" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Phone</label>
+                            <InputText @bind-Value="Input.Phone" id="Phone"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                                placeholder="+1 (555) 000-0000" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="Website" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Website</label>
+                        <InputText @bind-Value="Input.Website" id="Website"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                            placeholder="https://www.yourcompany.com" />
+                    </div>
+                </div>
+            </Card>
+
+            <!-- Address -->
+            <Card Title="Business Address">
+                <div class="space-y-4">
+                    <div>
+                        <label for="Street" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Street Address</label>
+                        <InputText @bind-Value="Input.Street" id="Street"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                            placeholder="123 Business Street" />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <div>
+                            <label for="City" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">City</label>
+                            <InputText @bind-Value="Input.City" id="City"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                        </div>
+                        <div>
+                            <label for="State" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">State/Province</label>
+                            <InputText @bind-Value="Input.State" id="State"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                        </div>
+                        <div>
+                            <label for="PostalCode" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Postal Code</label>
+                            <InputText @bind-Value="Input.PostalCode" id="PostalCode"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                        </div>
+                        <div>
+                            <label for="Country" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Country</label>
+                            <InputText @bind-Value="Input.Country" id="Country"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                        </div>
+                    </div>
+                </div>
+            </Card>
+
+            <!-- Tax & Registration -->
+            <Card Title="Tax & Registration">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="TaxNumber" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Tax Number / VAT ID</label>
+                        <InputText @bind-Value="Input.TaxNumber" id="TaxNumber"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                            placeholder="GB123456789" />
+                    </div>
+                    <div>
+                        <label for="RegistrationNumber" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Company Registration Number</label>
+                        <InputText @bind-Value="Input.RegistrationNumber" id="RegistrationNumber"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                            placeholder="12345678" />
+                    </div>
+                </div>
+            </Card>
+
+            <!-- Actions -->
+            <div class="flex items-center justify-end">
+                <PrimaryButton ButtonType="submit" Text="Save Changes" IsLoading="_isSaving" />
+            </div>
+        </EditForm>
+    }
+</div>
+
+<ErrorAlert Message="@_errorMessage" />
+
+@code {
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private string? _statusMessage;
+    private string? _errorMessage;
+    private bool _isError;
+
+    // Store the full profile so we can preserve invoice settings when saving
+    private BusinessProfileDto? _fullProfile;
+
+    private InputModel Input { get; init; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        try
+        {
+            _fullProfile = await GetBusinessProfileCall.Call(new GetBusinessProfile());
+            if (_fullProfile != null)
+            {
+                Input.CompanyName = _fullProfile.CompanyName;
+                Input.TradingName = _fullProfile.TradingName;
+                Input.Email = _fullProfile.Email;
+                Input.Phone = _fullProfile.Phone;
+                Input.Website = _fullProfile.Website;
+                Input.Street = _fullProfile.Street;
+                Input.City = _fullProfile.City;
+                Input.State = _fullProfile.State;
+                Input.PostalCode = _fullProfile.PostalCode;
+                Input.Country = _fullProfile.Country;
+                Input.TaxNumber = _fullProfile.TaxNumber;
+                Input.RegistrationNumber = _fullProfile.RegistrationNumber;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load business profile: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnValidSubmitAsync()
+    {
+        _isSaving = true;
+        _statusMessage = null;
+
+        try
+        {
+            // Preserve invoice settings (bank details, PayPal, etc.) from the full profile
+            await SaveBusinessProfileCall.Call(new SaveBusinessProfile
+            {
+                CompanyName = Input.CompanyName!,
+                TradingName = Input.TradingName,
+                Email = Input.Email!,
+                Phone = Input.Phone,
+                Website = Input.Website,
+                Street = Input.Street,
+                City = Input.City,
+                State = Input.State,
+                PostalCode = Input.PostalCode,
+                Country = Input.Country,
+                TaxNumber = Input.TaxNumber,
+                RegistrationNumber = Input.RegistrationNumber,
+                // Preserve invoice settings from the original profile
+                BankName = _fullProfile?.BankName,
+                BankAccountName = _fullProfile?.BankAccountName,
+                BankAccountNumber = _fullProfile?.BankAccountNumber,
+                BankSortCode = _fullProfile?.BankSortCode,
+                BankIban = _fullProfile?.BankIban,
+                BankSwift = _fullProfile?.BankSwift,
+                DefaultCurrency = _fullProfile?.DefaultCurrency ?? "USD",
+                DefaultPaymentTermsDays = _fullProfile?.DefaultPaymentTermsDays ?? 30,
+                InvoiceNotes = _fullProfile?.InvoiceNotes,
+                InvoiceFooter = _fullProfile?.InvoiceFooter,
+                InvoiceEmailSubject = _fullProfile?.InvoiceEmailSubject,
+                InvoiceEmailBody = _fullProfile?.InvoiceEmailBody,
+                PayPalMeUsername = _fullProfile?.PayPalMeUsername,
+                WiseEmail = _fullProfile?.WiseEmail,
+                VietQrBankCode = _fullProfile?.VietQrBankCode
+            });
+            _statusMessage = "Your business profile has been saved.";
+            _isError = false;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error saving business profile: {ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Company name is required")]
+        [StringLength(200, ErrorMessage = "Company name cannot exceed 200 characters")]
+        public string? CompanyName { get; set; }
+
+        public string? TradingName { get; set; }
+
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Invalid email address")]
+        public string? Email { get; set; }
+
+        public string? Phone { get; set; }
+        public string? Website { get; set; }
+        public string? Street { get; set; }
+        public string? City { get; set; }
+        public string? State { get; set; }
+        public string? PostalCode { get; set; }
+        public string? Country { get; set; }
+        public string? TaxNumber { get; set; }
+        public string? RegistrationNumber { get; set; }
+    }
+}

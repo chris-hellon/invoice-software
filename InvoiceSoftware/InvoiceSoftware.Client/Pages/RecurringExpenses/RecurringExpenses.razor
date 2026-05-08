@@ -1,0 +1,263 @@
+@page "/recurring-expenses"
+
+@inject ICall<GetRecurringExpenses, PaginatedResponse<RecurringExpenseSummaryDto>> GetRecurringExpensesCall
+@inject ICall<DeleteRecurringExpense> DeleteRecurringExpenseCall
+@inject ICall<PauseRecurringExpense> PauseRecurringExpenseCall
+@inject ICall<ResumeRecurringExpense> ResumeRecurringExpenseCall
+
+<PageTitle>Recurring Expenses - InvoicePro</PageTitle>
+
+<ListPageLayout Title="Recurring Expenses"
+                Description="Manage scheduled expenses that auto-generate."
+                ActionUrl="recurring-expenses/new"
+                ActionText="New Recurring Expense"
+                SearchPlaceholder="Search recurring expenses..."
+                SearchValue="@_searchTerm"
+                SearchValueChanged="OnSearchChanged"
+                Breadcrumbs="@(new List<PageHeader.BreadcrumbItem> { new("Recurring Expenses") })">
+    <Filters>
+        <select @bind="_selectedCategory" @bind:after="OnFilterChanged" class="py-3 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="">All Categories</option>
+            @foreach (var category in Enum.GetValues<ExpenseCategory>())
+            {
+                <option value="@category.ToString()">@category.GetDisplayName()</option>
+            }
+        </select>
+        <select @bind="_selectedActive" @bind:after="OnFilterChanged" class="py-3 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="">All Status</option>
+            <option value="true">Active</option>
+            <option value="false">Paused</option>
+        </select>
+    </Filters>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <LoadingTable Rows="5" Columns="7" />
+        }
+        else if (_response == null || !_response.Items.Any())
+        {
+            <EmptyState Title="No recurring expenses found"
+                        Message="@(HasActiveFilters ? "No recurring expenses match your filters. Try adjusting your search." : "Set up recurring expenses to auto-generate expense records.")"
+                        IconType="EmptyState.EmptyStateIcon.Refresh"
+                        ActionUrl="@(HasActiveFilters ? null : "recurring-expenses/new")"
+                        ActionText="@(HasActiveFilters ? null : "New Recurring Expense")" />
+        }
+        else
+        {
+            <DataTable TItem="RecurringExpenseSummaryDto"
+                       Items="_response.Items"
+                       CurrentPage="_response.Page"
+                       TotalCount="_response.TotalCount"
+                       PageSize="_response.PageSize"
+                       ItemName="recurring expenses"
+                       OnPageChanged="OnPageChanged">
+                <HeaderTemplate>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Merchant</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Category</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Frequency</th>
+                    <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Amount</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Next Date</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                    <th scope="col" class="relative px-6 py-4"><span class="sr-only">Actions</span></th>
+                </HeaderTemplate>
+                <RowTemplate Context="expense">
+                    <tr class="group hover:bg-gray-50/50 dark:hover:bg-[#2d2a4a]/50 transition-colors">
+                        <td class="px-6 py-4">
+                            <a href="recurring-expenses/@expense.Id" class="text-sm font-medium text-gray-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors hover:underline">@expense.MerchantName</a>
+                            @if (expense.ClientName != null)
+                            {
+                                <div class="text-sm text-gray-500 dark:text-slate-400">@expense.ClientName</div>
+                            }
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="@ExpenseCategoryExtensions.Parse(expense.Category).GetBadgeClass()">@ExpenseCategoryExtensions.Parse(expense.Category).GetDisplayName()</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-slate-100">
+                                Every @(expense.FrequencyInterval == 1 ? "" : $"{expense.FrequencyInterval} ")@RecurrenceFrequencyExtensions.Parse(expense.Frequency).GetSingular()@(expense.FrequencyInterval > 1 ? "s" : "")
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-slate-400">@expense.GeneratedCount generated</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <div class="text-sm font-semibold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(expense.Currency)@expense.Amount.ToString("N2")</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            @if (expense.IsActive)
+                            {
+                                <div class="text-sm text-gray-900 dark:text-slate-100">@expense.NextExpenseDate.ToString("MMM d, yyyy")</div>
+                                @if (GetDaysUntil(expense.NextExpenseDate) <= 0)
+                                {
+                                    <div class="text-xs text-amber-600 dark:text-amber-400">Due now</div>
+                                }
+                                else if (GetDaysUntil(expense.NextExpenseDate) <= 7)
+                                {
+                                    var days = GetDaysUntil(expense.NextExpenseDate);
+                                    <div class="text-xs text-gray-500 dark:text-slate-400">In @days day@(days > 1 ? "s" : "")</div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="text-sm text-gray-400 dark:text-slate-500">-</div>
+                            }
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            @if (expense.IsActive)
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Active</span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400">Paused</span>
+                            }
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <div class="flex items-center justify-end gap-1">
+                                @if (expense.IsActive)
+                                {
+                                    <IconButton OnClick="() => PauseExpenseAsync(expense)" Title="Pause">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </IconButton>
+                                }
+                                else
+                                {
+                                    <IconButton OnClick="() => ResumeExpenseAsync(expense)" Title="Resume">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </IconButton>
+                                }
+                                <IconButton Href="@($"recurring-expenses/{expense.Id}")" Title="View">
+                                    <ViewIcon />
+                                </IconButton>
+                                <IconButton Href="@($"recurring-expenses/{expense.Id}/edit")" Title="Edit">
+                                    <EditIcon />
+                                </IconButton>
+                                <IconButton OnClick="() => DeleteExpenseAsync(expense)" Variant="IconButton.IconButtonVariant.Danger" Title="Delete">
+                                    <DeleteIcon />
+                                </IconButton>
+                            </div>
+                        </td>
+                    </tr>
+                </RowTemplate>
+            </DataTable>
+        }
+    </ChildContent>
+</ListPageLayout>
+
+@code {
+    private PaginatedResponse<RecurringExpenseSummaryDto>? _response;
+    private bool _isLoading = true;
+    private string _searchTerm = "";
+    private string _selectedCategory = "";
+    private string _selectedActive = "";
+    private int _currentPage = 1;
+    private const int PageSize = 15;
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_searchTerm) || !string.IsNullOrEmpty(_selectedCategory) || !string.IsNullOrEmpty(_selectedActive);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadExpenses();
+    }
+
+    private async Task LoadExpenses()
+    {
+        _isLoading = true;
+        try
+        {
+            _response = await GetRecurringExpensesCall.Call(new GetRecurringExpenses
+            {
+                Category = string.IsNullOrEmpty(_selectedCategory) ? null : _selectedCategory,
+                IsActive = string.IsNullOrEmpty(_selectedActive) ? null : bool.Parse(_selectedActive),
+                Page = _currentPage,
+                PageSize = PageSize,
+                Search = _searchTerm
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading recurring expenses: {ex.Message}");
+            _response = new PaginatedResponse<RecurringExpenseSummaryDto>();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        _currentPage = 1;
+        await LoadExpenses();
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        _searchTerm = value;
+        _currentPage = 1;
+        await LoadExpenses();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadExpenses();
+    }
+
+    private async Task PauseExpenseAsync(RecurringExpenseSummaryDto expense)
+    {
+        try
+        {
+            await PauseRecurringExpenseCall.Call(new PauseRecurringExpense { Id = expense.Id });
+            await LoadExpenses();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error pausing expense: {ex.Message}");
+        }
+    }
+
+    private async Task ResumeExpenseAsync(RecurringExpenseSummaryDto expense)
+    {
+        try
+        {
+            await ResumeRecurringExpenseCall.Call(new ResumeRecurringExpense { Id = expense.Id });
+            await LoadExpenses();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error resuming expense: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteExpenseAsync(RecurringExpenseSummaryDto expense)
+    {
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Recurring Expense",
+            new Dictionary<string, object>
+            {
+                { "ItemName", expense.MerchantName },
+                { "WarningMessage", $"This will stop future expenses from being generated. {expense.GeneratedCount} expenses have already been created." }
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (!confirmed) return;
+
+        try
+        {
+            await DeleteRecurringExpenseCall.Call(new DeleteRecurringExpense { Id = expense.Id });
+            await LoadExpenses();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting recurring expense: {ex.Message}");
+        }
+    }
+
+    private static int GetDaysUntil(DateOnly date) =>
+        date.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber;
+}

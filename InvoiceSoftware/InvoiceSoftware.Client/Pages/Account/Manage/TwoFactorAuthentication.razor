@@ -1,0 +1,381 @@
+@page "/account/manage/two-factor-authentication"
+
+@inject ICall<GetTwoFactorStatus, TwoFactorStatusDto> GetTwoFactorStatusCall
+@inject ICall<GetAuthenticatorKey, AuthenticatorKeyDto> GetAuthenticatorKeyCall
+@inject ICall<EnableTwoFactor, EnableTwoFactorResultDto> EnableTwoFactorCall
+@inject ICall<DisableTwoFactor> DisableTwoFactorCall
+@inject ICall<GenerateRecoveryCodes, RecoveryCodesDto> GenerateRecoveryCodesCall
+@inject ICall<ResetAuthenticator> ResetAuthenticatorCall
+
+<PageTitle>Two-Factor Authentication - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <div>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-slate-100">Two-Factor Authentication</h2>
+        <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">Add an extra layer of security to your account.</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="@(_isError ? "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300" : "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300") p-4 rounded-xl border text-sm">
+            @_statusMessage
+        </div>
+    }
+
+    @if (_isLoading)
+    {
+        <div class="flex justify-center py-8">
+            <div class="w-8 h-8 border-4 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"></div>
+        </div>
+    }
+    else if (_status is not null)
+    {
+        <!-- Status Card -->
+        <div class="bg-gray-50 dark:bg-[#1a1827] rounded-xl p-4 border border-gray-200 dark:border-[#3d3a5c]">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    @if (_status.Is2faEnabled)
+                    {
+                        <div class="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-slate-100">Two-factor authentication is enabled</p>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">@_status.RecoveryCodesLeft recovery codes remaining</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-slate-100">Two-factor authentication is not enabled</p>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">Enable 2FA to add an extra layer of security</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (_showRecoveryCodes && _recoveryCodes is not null)
+        {
+            <!-- Recovery Codes Display -->
+            <div class="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-6 border border-amber-200 dark:border-amber-800">
+                <div class="flex items-start gap-3 mb-4">
+                    <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    <div>
+                        <h3 class="font-medium text-amber-800 dark:text-amber-200">Save your recovery codes</h3>
+                        <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">Store these codes in a safe place. Each code can only be used once.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 bg-white dark:bg-[#1a1827] rounded-lg p-4 font-mono text-sm">
+                    @foreach (var recoveryCode in _recoveryCodes)
+                    {
+                        <div class="text-gray-900 dark:text-slate-100">@recoveryCode</div>
+                    }
+                </div>
+                <button @onclick="() => _showRecoveryCodes = false" class="mt-4 text-sm text-amber-700 dark:text-amber-300 hover:underline">
+                    I've saved these codes
+                </button>
+            </div>
+        }
+
+        @if (_status.Is2faEnabled)
+        {
+            <!-- Enabled Actions -->
+            <div class="space-y-4">
+                @if (_status.RecoveryCodesLeft <= 3)
+                {
+                    <div class="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+                        <p class="text-sm text-amber-700 dark:text-amber-300">
+                            <strong>Warning:</strong> You have @_status.RecoveryCodesLeft recovery codes left. Generate new codes now.
+                        </p>
+                    </div>
+                }
+
+                <div class="flex flex-wrap gap-3">
+                    <button @onclick="GenerateNewRecoveryCodes" disabled="@_isProcessing"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-xl hover:bg-gray-50 dark:hover:bg-[#2d2a4a] transition-colors disabled:opacity-50">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Generate Recovery Codes
+                    </button>
+                    <button @onclick="ResetAuthenticator" disabled="@_isProcessing"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors disabled:opacity-50">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Reset Authenticator
+                    </button>
+                    <button @onclick="Disable2Fa" disabled="@_isProcessing"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        Disable 2FA
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Setup Flow -->
+            @if (!_showSetup)
+            {
+                <button @onclick="StartSetup"
+                    class="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+                    style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Enable Two-Factor Authentication
+                </button>
+            }
+            else if (_authenticatorKey is not null)
+            {
+                <div class="space-y-6 border-t border-gray-200 dark:border-[#3d3a5c] pt-6">
+                    <div>
+                        <h3 class="text-base font-medium text-gray-900 dark:text-slate-100 mb-2">Configure Authenticator App</h3>
+                        <p class="text-sm text-gray-500 dark:text-slate-400">
+                            Scan the QR code or enter the key manually in your authenticator app.
+                        </p>
+                    </div>
+
+                    <!-- QR Code Placeholder -->
+                    <div class="flex flex-col sm:flex-row gap-6">
+                        <div class="bg-white dark:bg-[#1a1827] p-4 rounded-xl border border-gray-200 dark:border-[#3d3a5c] inline-block">
+                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=@Uri.EscapeDataString(_authenticatorKey.AuthenticatorUri)"
+                                 alt="QR Code" class="w-48 h-48" />
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm text-gray-500 dark:text-slate-400 mb-2">Or enter this key manually:</p>
+                            <code class="block bg-gray-100 dark:bg-[#1a1827] px-4 py-3 rounded-lg text-sm font-mono text-gray-900 dark:text-slate-100 break-all">
+                                @_authenticatorKey.SharedKey
+                            </code>
+                        </div>
+                    </div>
+
+                    <!-- Verification Form -->
+                    <EditForm Model="_verificationInput" OnValidSubmit="VerifyCode" class="space-y-4">
+                        <DataAnnotationsValidator />
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Verification Code</label>
+                            <InputText @bind-Value="_verificationInput.Code"
+                                class="w-full sm:w-64 px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                                placeholder="Enter 6-digit code" autocomplete="off" />
+                            <ValidationMessage For="() => _verificationInput.Code" class="mt-1.5 text-xs text-red-600 dark:text-red-400" />
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="submit" disabled="@_isProcessing"
+                                class="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.98] disabled:opacity-50"
+                                style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">
+                                @if (_isProcessing)
+                                {
+                                    <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    <span>Verifying...</span>
+                                }
+                                else
+                                {
+                                    <span>Verify & Enable</span>
+                                }
+                            </button>
+                            <button type="button" @onclick="CancelSetup"
+                                class="px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100">
+                                Cancel
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private TwoFactorStatusDto? _status;
+    private AuthenticatorKeyDto? _authenticatorKey;
+    private string[]? _recoveryCodes;
+    private VerificationInputModel _verificationInput = new();
+    private bool _isLoading = true;
+    private bool _isProcessing;
+    private bool _showSetup;
+    private bool _showRecoveryCodes;
+    private string? _statusMessage;
+    private bool _isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatus();
+    }
+
+    private async Task LoadStatus()
+    {
+        try
+        {
+            _status = await GetTwoFactorStatusCall.Call(new GetTwoFactorStatus());
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error loading status: {ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task StartSetup()
+    {
+        _isProcessing = true;
+        _statusMessage = null;
+
+        try
+        {
+            _authenticatorKey = await GetAuthenticatorKeyCall.Call(new GetAuthenticatorKey());
+            _showSetup = true;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error: {ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private void CancelSetup()
+    {
+        _showSetup = false;
+        _authenticatorKey = null;
+        _verificationInput = new();
+    }
+
+    private async Task VerifyCode()
+    {
+        _isProcessing = true;
+        _statusMessage = null;
+
+        try
+        {
+            var result = await EnableTwoFactorCall.Call(new EnableTwoFactor
+            {
+                Code = _verificationInput.Code
+            });
+
+            if (result.Success)
+            {
+                _recoveryCodes = result.RecoveryCodes;
+                _showRecoveryCodes = true;
+                _showSetup = false;
+                _authenticatorKey = null;
+                _verificationInput = new();
+                await LoadStatus();
+                _statusMessage = "Two-factor authentication has been enabled.";
+                _isError = false;
+            }
+            else
+            {
+                _statusMessage = result.ErrorMessage ?? "Invalid verification code.";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error: {ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task Disable2Fa()
+    {
+        _isProcessing = true;
+        _statusMessage = null;
+
+        try
+        {
+            await DisableTwoFactorCall.Call(new DisableTwoFactor());
+            await LoadStatus();
+            _statusMessage = "Two-factor authentication has been disabled.";
+            _isError = false;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error: {ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task GenerateNewRecoveryCodes()
+    {
+        _isProcessing = true;
+        _statusMessage = null;
+
+        try
+        {
+            var result = await GenerateRecoveryCodesCall.Call(new GenerateRecoveryCodes());
+            _recoveryCodes = result.Codes;
+            _showRecoveryCodes = true;
+            await LoadStatus();
+            _statusMessage = "New recovery codes have been generated.";
+            _isError = false;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error: {ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task ResetAuthenticator()
+    {
+        _isProcessing = true;
+        _statusMessage = null;
+
+        try
+        {
+            await ResetAuthenticatorCall.Call(new ResetAuthenticator());
+            await LoadStatus();
+            _statusMessage = "Authenticator has been reset. You can now set up a new authenticator app.";
+            _isError = false;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error: {ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private class VerificationInputModel
+    {
+        [Required]
+        [StringLength(7, MinimumLength = 6)]
+        public string Code { get; set; } = "";
+    }
+}

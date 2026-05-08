@@ -1,0 +1,266 @@
+@page "/products/new"
+@page "/products/{Id:guid}/edit"
+
+@inject ICall<GetProduct, ProductDetailDto> GetProductCall
+@inject ICall<CreateProduct, Guid> CreateProductCall
+@inject ICall<UpdateProduct> UpdateProductCall
+
+<PageTitle>@(Id.HasValue ? "Edit Product" : "New Product") - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <PageHeader Title="@(Id.HasValue ? "Edit Product" : "New Product")"
+                Description="@(Id.HasValue ? "Update product information" : "Add a new product or service to your catalog")"
+                ShowBackButton="true"
+                BackUrl="products"
+                Breadcrumbs="@_breadcrumbs" />
+
+    @if (_isLoading)
+    {
+        <LoadingSpinner Padding="py-20" />
+    }
+    else
+    {
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit" class="space-y-6">
+            <DataAnnotationsValidator />
+
+            <Card Title="Product Details" Description="Basic information about this product or service.">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div class="sm:col-span-2">
+                        <label for="name" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Product Name <span class="text-red-500">*</span></label>
+                        <InputText id="name" @bind-Value="_model.Name"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                            placeholder="Website Design Package" />
+                        <ValidationMessage For="@(() => _model.Name)" class="mt-1.5 text-xs text-red-600" />
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Description</label>
+                        <InputTextArea id="description" @bind-Value="_model.Description" rows="3"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500 resize-none"
+                            placeholder="Complete website design including mockups, development, and deployment..." />
+                    </div>
+
+                    <div>
+                        <label for="category" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Category</label>
+                        <InputText id="category" @bind-Value="_model.Category"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500"
+                            placeholder="Design Services" />
+                    </div>
+
+                    <div>
+                        <label for="sku" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">SKU</label>
+                        <InputText id="sku" @bind-Value="_model.Sku"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500 font-mono"
+                            placeholder="WEB-001" />
+                    </div>
+                </div>
+            </Card>
+
+            <Card Title="Pricing" Description="Set the default pricing for this product.">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div>
+                        <label for="currency" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Currency <span class="text-red-500">*</span></label>
+                        <InputSelect id="currency" @bind-Value="_model.Currency"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500 cursor-pointer">
+                            @foreach (var currency in Enum.GetValues<Currency>())
+                            {
+                                <option value="@currency.ToString()">@currency.ToString() (@currency.GetSymbol())</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label for="unitPrice" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Unit Price <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <span class="text-gray-500 dark:text-slate-400 text-sm">@CurrencyExtensions.GetSymbol(_model.Currency)</span>
+                            </div>
+                            <InputNumber id="unitPrice" @bind-Value="_model.UnitPrice"
+                                class="w-full pl-8 pr-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                        </div>
+                        <ValidationMessage For="@(() => _model.UnitPrice)" class="mt-1.5 text-xs text-red-600" />
+                    </div>
+
+                    <div>
+                        <label for="defaultQuantity" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Default Quantity</label>
+                        <InputNumber id="defaultQuantity" @bind-Value="_model.DefaultQuantity"
+                            class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                    </div>
+                </div>
+
+                <hr class="border-gray-100 dark:border-slate-700" />
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                        <label for="taxRate" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Tax Rate (%)</label>
+                        <div class="relative">
+                            <InputNumber id="taxRate" @bind-Value="_model.TaxRate"
+                                class="w-full pr-8 px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-slate-500" />
+                            <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                <span class="text-gray-400 dark:text-slate-500 text-sm">%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-end pb-1">
+                        <label class="relative flex items-center gap-3 cursor-pointer group">
+                            <div class="relative">
+                                <InputCheckbox id="isActive" @bind-Value="_model.IsActive" class="sr-only peer" />
+                                <div class="w-11 h-6 bg-gray-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-sm peer-checked:bg-indigo-600"></div>
+                            </div>
+                            <span class="text-sm font-medium text-gray-700 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-100">Active Product</span>
+                        </label>
+                    </div>
+                </div>
+            </Card>
+
+            <ErrorAlert Message="@_errorMessage" />
+
+            <div class="flex items-center justify-end gap-3 pt-4">
+                <a href="products" class="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-gray-300 dark:hover:border-slate-500 transition-all duration-200">
+                    Cancel
+                </a>
+                <PrimaryButton ButtonType="submit"
+                               Text="@(Id.HasValue ? "Save Changes" : "Create Product")"
+                               IsLoading="@_isSaving"
+                               ShowIcon="false" />
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private ProductFormModel _model = new();
+    private bool _isLoading;
+    private bool _isSaving;
+    private string? _errorMessage;
+    private List<PageHeader.BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new PageHeader.BreadcrumbItem("Products", "/products"),
+            new PageHeader.BreadcrumbItem(Id.HasValue ? "Edit Product" : "New Product")
+        ];
+
+        if (Id.HasValue)
+        {
+            _isLoading = true;
+            try
+            {
+                var product = await GetProductCall.Call(new GetProduct { Id = Id.Value });
+                if (product != null)
+                {
+                    _model = new ProductFormModel
+                    {
+                        Name = product.Name,
+                        Description = product.Description,
+                        UnitPrice = product.UnitPrice,
+                        Currency = product.Currency,
+                        DefaultQuantity = product.DefaultQuantity,
+                        Category = product.Category,
+                        Sku = product.Sku,
+                        TaxRate = product.TaxRate,
+                        IsActive = product.IsActive
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Failed to load product: {ex.Message}";
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+        else
+        {
+            _model.IsActive = true;
+            _model.DefaultQuantity = 1;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (Id.HasValue)
+            {
+                await UpdateProductCall.Call(new UpdateProduct
+                {
+                    Id = Id.Value,
+                    Name = _model.Name,
+                    Description = _model.Description,
+                    UnitPrice = _model.UnitPrice,
+                    Currency = _model.Currency,
+                    DefaultQuantity = _model.DefaultQuantity,
+                    Category = _model.Category,
+                    Sku = _model.Sku,
+                    TaxRate = _model.TaxRate,
+                    IsActive = _model.IsActive
+                });
+            }
+            else
+            {
+                await CreateProductCall.Call(new CreateProduct
+                {
+                    Name = _model.Name,
+                    Description = _model.Description,
+                    UnitPrice = _model.UnitPrice,
+                    Currency = _model.Currency,
+                    DefaultQuantity = _model.DefaultQuantity,
+                    Category = _model.Category,
+                    Sku = _model.Sku,
+                    TaxRate = _model.TaxRate
+                });
+            }
+            NavigationManager.NavigateTo("products");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    public class ProductFormModel
+    {
+        [Required(ErrorMessage = "Product name is required")]
+        [StringLength(200, ErrorMessage = "Name cannot exceed 200 characters")]
+        public string Name { get; set; } = "";
+
+        [StringLength(2000)]
+        public string? Description { get; set; }
+
+        [Required(ErrorMessage = "Unit price is required")]
+        [Range(0.01, 10000000, ErrorMessage = "Price must be between 0.01 and 10,000,000")]
+        public decimal UnitPrice { get; set; }
+
+        [Required]
+        public string Currency { get; set; } = "GBP";
+
+        public decimal DefaultQuantity { get; set; } = 1;
+
+        [StringLength(100)]
+        public string? Category { get; set; }
+
+        [StringLength(50)]
+        public string? Sku { get; set; }
+
+        [Range(0, 100, ErrorMessage = "Tax rate must be between 0 and 100")]
+        public decimal? TaxRate { get; set; }
+
+        public bool IsActive { get; set; } = true;
+    }
+}

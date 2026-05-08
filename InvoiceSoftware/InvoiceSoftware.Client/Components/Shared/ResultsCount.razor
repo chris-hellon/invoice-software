@@ -1,0 +1,16 @@
+@* Results count display *@
+
+<div class="mt-6 text-sm text-gray-500 text-center">
+    Showing @Filtered of @Total @ItemName
+</div>
+
+@code {
+    [Parameter]
+    public int Filtered { get; set; }
+
+    [Parameter]
+    public int Total { get; set; }
+
+    [Parameter]
+    public string ItemName { get; set; } = "items";
+}

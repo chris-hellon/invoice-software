@@ -1,0 +1,420 @@
+@page "/recurring-expenses/{Id:guid}"
+
+@inject ICall<GetRecurringExpense, RecurringExpenseDetailDto> GetRecurringExpenseCall
+@inject ICall<DeleteRecurringExpense> DeleteRecurringExpenseCall
+@inject ICall<PauseRecurringExpense> PauseRecurringExpenseCall
+@inject ICall<ResumeRecurringExpense> ResumeRecurringExpenseCall
+@inject ICall<GenerateExpensesNow, ExpenseSummaryDto> GenerateExpensesNowCall
+
+<PageTitle>@(_expense != null ? _expense.MerchantName : "Recurring Expense") - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <PageHeader Title="@(_expense != null ? _expense.MerchantName : "Recurring Expense")"
+                Description="@(_expense != null ? $"{ExpenseCategoryExtensions.Parse(_expense.Category).GetDisplayName()} • {GetFrequencyDescription()}" : "")"
+                ShowBackButton="true"
+                BackUrl="recurring-expenses"
+                Breadcrumbs="@_breadcrumbs">
+        @if (_expense != null)
+        {
+            <div class="flex items-center gap-3">
+                @if (_expense.IsActive)
+                {
+                    <button @onclick="PauseExpenseAsync" disabled="@_isProcessing"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all duration-200 disabled:opacity-50">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Pause
+                    </button>
+                    <button @onclick="GenerateNowAsync" disabled="@_isProcessing"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all duration-200 disabled:opacity-50">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Generate Now
+                    </button>
+                }
+                else
+                {
+                    <button @onclick="ResumeExpenseAsync" disabled="@_isProcessing"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all duration-200 disabled:opacity-50">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Resume
+                    </button>
+                }
+                <a href="recurring-expenses/@Id/edit" class="btn-secondary">
+                    <EditIcon />
+                    Edit
+                </a>
+                <button @onclick="DeleteExpenseAsync" disabled="@_isDeleting"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                    @if (_isDeleting)
+                    {
+                        <div class="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
+                    }
+                    else
+                    {
+                        <DeleteIcon />
+                    }
+                    Delete
+                </button>
+            </div>
+        }
+    </PageHeader>
+
+    @if (_isLoading)
+    {
+        <div class="flex justify-center py-20">
+            <div class="w-8 h-8 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+    }
+    else if (_expense == null)
+    {
+        <div class="card">
+            <div class="text-center py-16 px-6">
+                <div class="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+                     style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);">
+                    <svg class="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h3 class="text-base font-semibold text-gray-900 dark:text-slate-100">Recurring expense not found</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">The requested recurring expense could not be found.</p>
+                <div class="mt-6">
+                    <a href="recurring-expenses" class="btn-primary">Back to Recurring Expenses</a>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Status Banner -->
+        <div class="@(_expense.IsActive ? "bg-gradient-to-r from-emerald-500 to-emerald-600" : "bg-gradient-to-r from-gray-400 to-gray-500") rounded-2xl px-6 py-5 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm text-white/80 uppercase tracking-wide font-medium">Amount per @RecurrenceFrequencyExtensions.Parse(_expense.Frequency).GetSingular().ToLower()</div>
+                    <div class="text-3xl font-bold mt-1">@CurrencyExtensions.GetSymbol(_expense.Currency)@_expense.Amount.ToString("N2")</div>
+                    @if (_expense.TaxAmount > 0)
+                    {
+                        <div class="text-sm text-white/70 mt-1">+ @CurrencyExtensions.GetSymbol(_expense.Currency)@_expense.TaxAmount.ToString("N2") tax</div>
+                    }
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-white/80">Status</div>
+                    <div class="text-xl font-semibold mt-1">@(_expense.IsActive ? "Active" : "Paused")</div>
+                    @if (_expense.IsActive)
+                    {
+                        <div class="text-sm text-white/70 mt-1">Next: @_expense.NextExpenseDate.ToString("MMM d, yyyy")</div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Message -->
+        @if (!string.IsNullOrEmpty(_successMessage))
+        {
+            <div class="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 p-4">
+                <div class="flex gap-3">
+                    <svg class="h-5 w-5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p class="text-sm text-emerald-700 dark:text-emerald-400">@_successMessage</p>
+                </div>
+            </div>
+        }
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Details Card -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="card overflow-hidden">
+                    <div class="card-header">
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Expense Details</h2>
+                    </div>
+                    <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                        <DetailRow Label="Category">
+                            <span class="@ExpenseCategoryExtensions.Parse(_expense.Category).GetBadgeClass()">@ExpenseCategoryExtensions.Parse(_expense.Category).GetDisplayName()</span>
+                        </DetailRow>
+                        <DetailRow Label="Merchant" Value="@_expense.MerchantName" />
+                        <DetailRow Label="Payment Method" Value="@PaymentMethodExtensions.Parse(_expense.PaymentMethod).GetDisplayName()" />
+                        @if (!string.IsNullOrEmpty(_expense.GroupName))
+                        {
+                            <DetailRow Label="Group" Value="@_expense.GroupName" />
+                        }
+                    </div>
+                </div>
+
+                <div class="card overflow-hidden">
+                    <div class="card-header">
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Schedule</h2>
+                    </div>
+                    <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                        <DetailRow Label="Frequency" Value="@GetFrequencyDescription()" />
+                        <DetailRow Label="Start Date" Value="@_expense.StartDate.ToString("MMMM d, yyyy")" />
+                        @if (_expense.EndDate.HasValue)
+                        {
+                            <DetailRow Label="End Date" Value="@_expense.EndDate.Value.ToString("MMMM d, yyyy")" />
+                        }
+                        else
+                        {
+                            <DetailRow Label="End Date" Value="No end date (continues indefinitely)" />
+                        }
+                        <DetailRow Label="Next Expense Date" Value="@(_expense.IsActive ? _expense.NextExpenseDate.ToString("MMMM d, yyyy") : "Paused")" />
+                        @if (_expense.LastGeneratedDate.HasValue)
+                        {
+                            <DetailRow Label="Last Generated" Value="@_expense.LastGeneratedDate.Value.ToString("MMMM d, yyyy")" />
+                        }
+                        <DetailRow Label="Generated Count" Value="@_expense.GeneratedCount.ToString()" />
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_expense.Notes))
+                {
+                    <div class="card overflow-hidden">
+                        <div class="card-header">
+                            <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Notes</h2>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">@_expense.Notes</p>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Sidebar -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Billing Info -->
+                <div class="card overflow-hidden">
+                    <div class="card-header">
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Billing</h2>
+                    </div>
+                    <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                        <DetailRow Label="Billable">
+                            @if (_expense.IsBillable)
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 dark:bg-slate-700 dark:text-slate-400">No</span>
+                            }
+                        </DetailRow>
+                        <DetailRow Label="Reimbursable">
+                            @if (_expense.IsReimbursable)
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 dark:bg-slate-700 dark:text-slate-400">No</span>
+                            }
+                        </DetailRow>
+                        @if (_expense.ClientName != null)
+                        {
+                            <DetailRow Label="Client" Value="@_expense.ClientName" />
+                        }
+                        @if (_expense.ProjectName != null)
+                        {
+                            <DetailRow Label="Project" Value="@_expense.ProjectName" />
+                        }
+                    </div>
+                </div>
+
+                <!-- Tax Info -->
+                @if (_expense.TaxAmount > 0 || !string.IsNullOrEmpty(_expense.MerchantTaxNumber))
+                {
+                    <div class="card overflow-hidden">
+                        <div class="card-header">
+                            <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Tax Information</h2>
+                        </div>
+                        <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                            @if (_expense.TaxAmount > 0)
+                            {
+                                <DetailRow Label="Tax Amount" Value="@($"{CurrencyExtensions.GetSymbol(_expense.Currency)}{_expense.TaxAmount:N2}")" />
+                                <DetailRow Label="Tax Inclusive" Value="@(_expense.IsTaxInclusive ? "Yes" : "No")" />
+                            }
+                            @if (!string.IsNullOrEmpty(_expense.MerchantTaxNumber))
+                            {
+                                <DetailRow Label="Merchant Tax #" Value="@_expense.MerchantTaxNumber" />
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Timestamps -->
+                <div class="card overflow-hidden">
+                    <div class="card-header">
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Activity</h2>
+                    </div>
+                    <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                        <DetailRow Label="Created" Value="@_expense.CreatedAt.ToString("MMM d, yyyy h:mm tt")" />
+                        @if (_expense.ModifiedAt.HasValue)
+                        {
+                            <DetailRow Label="Modified" Value="@_expense.ModifiedAt.Value.ToString("MMM d, yyyy h:mm tt")" />
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private RecurringExpenseDetailDto? _expense;
+    private bool _isLoading = true;
+    private bool _isDeleting;
+    private bool _isProcessing;
+    private string? _successMessage;
+    private List<PageHeader.BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new PageHeader.BreadcrumbItem("Recurring Expenses", "/recurring-expenses"),
+            new PageHeader.BreadcrumbItem("Details")
+        ];
+
+        await LoadExpense();
+    }
+
+    private async Task LoadExpense()
+    {
+        try
+        {
+            _expense = await GetRecurringExpenseCall.Call(new GetRecurringExpense { Id = Id });
+            if (_expense != null)
+            {
+                _breadcrumbs[1] = new PageHeader.BreadcrumbItem(_expense.MerchantName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading recurring expense: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private string GetFrequencyDescription()
+    {
+        if (_expense == null) return "";
+        var interval = _expense.FrequencyInterval;
+        var frequency = RecurrenceFrequencyExtensions.Parse(_expense.Frequency);
+        var unit = frequency switch
+        {
+            RecurrenceFrequency.Day => interval == 1 ? "day" : "days",
+            RecurrenceFrequency.Week => interval == 1 ? "week" : "weeks",
+            RecurrenceFrequency.Month => interval == 1 ? "month" : "months",
+            RecurrenceFrequency.Year => interval == 1 ? "year" : "years",
+            _ => "month"
+        };
+        return $"Every {(interval == 1 ? "" : $"{interval} ")}{unit}";
+    }
+
+    private async Task PauseExpenseAsync()
+    {
+        _isProcessing = true;
+        _successMessage = null;
+        try
+        {
+            await PauseRecurringExpenseCall.Call(new PauseRecurringExpense { Id = Id });
+            await LoadExpense();
+            _successMessage = "Recurring expense has been paused.";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error pausing expense: {ex.Message}");
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task ResumeExpenseAsync()
+    {
+        _isProcessing = true;
+        _successMessage = null;
+        try
+        {
+            await ResumeRecurringExpenseCall.Call(new ResumeRecurringExpense { Id = Id });
+            await LoadExpense();
+            _successMessage = "Recurring expense has been resumed.";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error resuming expense: {ex.Message}");
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task GenerateNowAsync()
+    {
+        _isProcessing = true;
+        _successMessage = null;
+        try
+        {
+            var result = await GenerateExpensesNowCall.Call(new GenerateExpensesNow { Id = Id });
+            await LoadExpense();
+            if (result != null)
+            {
+                _successMessage = $"Expense generated for {result.ExpenseDate:MMM d, yyyy}. View it in the Expenses list.";
+            }
+            else
+            {
+                _successMessage = "No expense was generated (may not be due yet).";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error generating expense: {ex.Message}");
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task DeleteExpenseAsync()
+    {
+        if (_expense == null) return;
+
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Recurring Expense",
+            new Dictionary<string, object>
+            {
+                { "ItemName", _expense.MerchantName },
+                { "WarningMessage", $"This will stop future expenses from being generated. {_expense.GeneratedCount} expenses have already been created and will remain." }
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (!confirmed) return;
+
+        _isDeleting = true;
+        try
+        {
+            await DeleteRecurringExpenseCall.Call(new DeleteRecurringExpense { Id = Id });
+            NavigationManager.NavigateTo("recurring-expenses");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting recurring expense: {ex.Message}");
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+}

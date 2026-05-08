@@ -1,0 +1,30 @@
+@* Loading spinner component *@
+
+<div class="flex justify-center @PaddingClass">
+    <div class="@SizeClass border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+</div>
+
+@code {
+    [Parameter]
+    public LoadingSize Size { get; set; } = LoadingSize.Medium;
+
+    [Parameter]
+    public string Padding { get; set; } = "py-12";
+
+    private string PaddingClass => Padding;
+
+    private string SizeClass => Size switch
+    {
+        LoadingSize.Small => "w-5 h-5",
+        LoadingSize.Medium => "w-8 h-8",
+        LoadingSize.Large => "w-12 h-12",
+        _ => "w-8 h-8"
+    };
+
+    public enum LoadingSize
+    {
+        Small,
+        Medium,
+        Large
+    }
+}

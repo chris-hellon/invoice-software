@@ -1,0 +1,41 @@
+@* Card/section container with optional header *@
+
+<div class="card overflow-hidden">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="card-header">
+            @if (HeaderContent != null)
+            {
+                @HeaderContent
+            }
+            else
+            {
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">@Title</h2>
+                @if (!string.IsNullOrEmpty(Description))
+                {
+                    <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">@Description</p>
+                }
+            }
+        </div>
+    }
+    <div class="@ContentClass">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public RenderFragment? HeaderContent { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public string ContentClass { get; set; } = "p-6 space-y-5";
+}

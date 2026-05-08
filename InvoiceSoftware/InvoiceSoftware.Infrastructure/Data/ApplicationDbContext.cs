@@ -1,0 +1,106 @@
+using InvoiceSoftware.Domain.Common;
+using InvoiceSoftware.Domain.Entities;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using System.Security.Claims;
+
+namespace InvoiceSoftware.Infrastructure.Data;
+
+public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
+{
+    // Existing entities
+    public DbSet<Client> Clients => Set<Client>();
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<ProjectSection> ProjectSections => Set<ProjectSection>();
+    public DbSet<Job> Jobs => Set<Job>();
+    public DbSet<JobTask> JobTasks => Set<JobTask>();
+    public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<BusinessProfile> BusinessProfiles => Set<BusinessProfile>();
+    public DbSet<CurrencyPaymentSettings> CurrencyPaymentSettings => Set<CurrencyPaymentSettings>();
+    public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<RecurringExpense> RecurringExpenses => Set<RecurringExpense>();
+
+    // New entities - Products & Estimates
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<Estimate> Estimates => Set<Estimate>();
+    public DbSet<EstimateLineItem> EstimateLineItems => Set<EstimateLineItem>();
+
+    // New entities - Recurring Invoices
+    public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
+    public DbSet<RecurringInvoiceLineItem> RecurringInvoiceLineItems => Set<RecurringInvoiceLineItem>();
+
+    // New entities - Attachments & Signatures
+    public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<DigitalSignature> DigitalSignatures => Set<DigitalSignature>();
+
+    // New entities - Bank Import
+    public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
+
+    // New entities - Templates & Localization
+    public DbSet<InvoiceTemplate> InvoiceTemplates => Set<InvoiceTemplate>();
+    public DbSet<UserLanguagePreference> UserLanguagePreferences => Set<UserLanguagePreference>();
+    public DbSet<ClientLanguageSetting> ClientLanguageSettings => Set<ClientLanguageSetting>();
+
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+        : base(options)
+    {
+    }
+
+    public override int SaveChanges()
+    {
+        UpdateAuditFields();
+        return base.SaveChanges();
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        UpdateAuditFields();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        UpdateAuditFields();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        UpdateAuditFields();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void UpdateAuditFields()
+    {
+        var now = DateTime.UtcNow;
+
+        // Get IHttpContextAccessor from the service provider
+        var httpContextAccessor = this.GetService<IHttpContextAccessor>();
+        var userId = httpContextAccessor?.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "System";
+
+        foreach (var entry in ChangeTracker.Entries<IAuditableEntity>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedBy = userId;
+                entry.Entity.CreatedAt = now;
+            }
+
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                entry.Entity.ModifiedBy = userId;
+                entry.Entity.ModifiedAt = now;
+            }
+        }
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+    }
+}

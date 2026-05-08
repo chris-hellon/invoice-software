@@ -1,0 +1,304 @@
+@page "/expenses/{Id:guid}"
+
+@inject ICall<GetExpense, ExpenseDetailDto> GetExpenseCall
+@inject ICall<DeleteExpense> DeleteExpenseCall
+
+<PageTitle>@(_expense != null ? _expense.MerchantName : "Expense") - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <PageHeader Title="@(_expense != null ? _expense.MerchantName : "Expense")"
+                Description="@(_expense != null ? $"{ExpenseCategoryExtensions.Parse(_expense.Category).GetDisplayName()} • {_expense.ExpenseDate:MMM d, yyyy}" : "")"
+                ShowBackButton="true"
+                BackUrl="expenses"
+                Breadcrumbs="@_breadcrumbs">
+        @if (_expense != null)
+        {
+            <div class="flex items-center gap-3">
+                <a href="expenses/@Id/edit" class="btn-secondary">
+                    <EditIcon />
+                    Edit Expense
+                </a>
+                <button @onclick="DeleteExpenseAsync" disabled="@_isDeleting"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                    @if (_isDeleting)
+                    {
+                        <div class="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
+                    }
+                    else
+                    {
+                        <DeleteIcon />
+                    }
+                    Delete
+                </button>
+            </div>
+        }
+    </PageHeader>
+
+    @if (_isLoading)
+    {
+        <div class="flex justify-center py-20">
+            <div class="w-8 h-8 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+    }
+    else if (_expense == null)
+    {
+        <div class="card">
+            <div class="text-center py-16 px-6">
+                <div class="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+                     style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);">
+                    <svg class="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h3 class="text-base font-semibold text-gray-900 dark:text-slate-100">Expense not found</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">The requested expense could not be found.</p>
+                <div class="mt-6">
+                    <a href="expenses" class="btn-primary">Back to Expenses</a>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Amount Banner -->
+        <div class="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-2xl px-6 py-5 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm text-indigo-100 uppercase tracking-wide font-medium">Total Amount</div>
+                    <div class="text-3xl font-bold mt-1">@CurrencyExtensions.GetSymbol(_expense.Currency)@((_expense.IsTaxInclusive ? _expense.Amount : _expense.Amount + _expense.TaxAmount).ToString("N2"))</div>
+                    @if (_expense.TaxAmount > 0)
+                    {
+                        <div class="text-sm text-indigo-200 mt-1">
+                            @CurrencyExtensions.GetSymbol(_expense.Currency)@_expense.Amount.ToString("N2") + @CurrencyExtensions.GetSymbol(_expense.Currency)@_expense.TaxAmount.ToString("N2") tax
+                            @if (_expense.IsTaxInclusive)
+                            {
+                                <span>(tax inclusive)</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="flex items-center gap-3">
+                    @if (_expense.IsBillable)
+                    {
+                        @if (_expense.IsBilled)
+                        {
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-white/20 text-white">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Billed
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-500 text-white">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Unbilled
+                            </span>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Details Card -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="card overflow-hidden">
+                    <div class="card-header">
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Expense Details</h2>
+                    </div>
+                    <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                        <DetailRow Label="Category">
+                            <span class="@ExpenseCategoryExtensions.Parse(_expense.Category).GetBadgeClass()">@ExpenseCategoryExtensions.Parse(_expense.Category).GetDisplayName()</span>
+                        </DetailRow>
+                        <DetailRow Label="Merchant" Value="@_expense.MerchantName" />
+                        <DetailRow Label="Date" Value="@_expense.ExpenseDate.ToString("MMMM d, yyyy")" />
+                        <DetailRow Label="Payment Method" Value="@PaymentMethodExtensions.Parse(_expense.PaymentMethod).GetDisplayName()" />
+                        @if (!string.IsNullOrEmpty(_expense.GroupName))
+                        {
+                            <DetailRow Label="Group" Value="@_expense.GroupName" />
+                        }
+                        @if (_expense.RecurringExpenseId.HasValue)
+                        {
+                            <DetailRow Label="Source">
+                                <a href="recurring-expenses/@_expense.RecurringExpenseId" class="text-indigo-600 dark:text-indigo-400 hover:underline">View Recurring Expense</a>
+                            </DetailRow>
+                        }
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_expense.Notes))
+                {
+                    <div class="card overflow-hidden">
+                        <div class="card-header">
+                            <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Notes</h2>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">@_expense.Notes</p>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Sidebar -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Billing Info -->
+                <div class="card overflow-hidden">
+                    <div class="card-header">
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Billing</h2>
+                    </div>
+                    <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                        <DetailRow Label="Billable">
+                            @if (_expense.IsBillable)
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 dark:bg-slate-700 dark:text-slate-400">No</span>
+                            }
+                        </DetailRow>
+                        <DetailRow Label="Reimbursable">
+                            @if (_expense.IsReimbursable)
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Yes</span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 dark:bg-slate-700 dark:text-slate-400">No</span>
+                            }
+                        </DetailRow>
+                        @if (_expense.ClientName != null)
+                        {
+                            <DetailRow Label="Client" Value="@_expense.ClientName" />
+                        }
+                        @if (_expense.ProjectName != null)
+                        {
+                            <DetailRow Label="Project" Value="@_expense.ProjectName" />
+                        }
+                        @if (_expense.InvoiceNumber != null)
+                        {
+                            <DetailRow Label="Invoice">
+                                <a href="invoices/@_expense.InvoiceId" class="text-indigo-600 dark:text-indigo-400 hover:underline">@_expense.InvoiceNumber</a>
+                            </DetailRow>
+                        }
+                    </div>
+                </div>
+
+                <!-- Tax Info -->
+                @if (_expense.TaxAmount > 0 || !string.IsNullOrEmpty(_expense.MerchantTaxNumber))
+                {
+                    <div class="card overflow-hidden">
+                        <div class="card-header">
+                            <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Tax Information</h2>
+                        </div>
+                        <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                            @if (_expense.TaxAmount > 0)
+                            {
+                                <DetailRow Label="Tax Amount" Value="@($"{CurrencyExtensions.GetSymbol(_expense.Currency)}{_expense.TaxAmount:N2}")" />
+                                <DetailRow Label="Tax Inclusive">
+                                    @if (_expense.IsTaxInclusive)
+                                    {
+                                        <span>Yes</span>
+                                    }
+                                    else
+                                    {
+                                        <span>No</span>
+                                    }
+                                </DetailRow>
+                            }
+                            @if (!string.IsNullOrEmpty(_expense.MerchantTaxNumber))
+                            {
+                                <DetailRow Label="Merchant Tax #" Value="@_expense.MerchantTaxNumber" />
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Timestamps -->
+                <div class="card overflow-hidden">
+                    <div class="card-header">
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Activity</h2>
+                    </div>
+                    <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                        <DetailRow Label="Created" Value="@_expense.CreatedAt.ToString("MMM d, yyyy h:mm tt")" />
+                        @if (_expense.ModifiedAt.HasValue)
+                        {
+                            <DetailRow Label="Modified" Value="@_expense.ModifiedAt.Value.ToString("MMM d, yyyy h:mm tt")" />
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private ExpenseDetailDto? _expense;
+    private bool _isLoading = true;
+    private bool _isDeleting;
+    private List<PageHeader.BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new PageHeader.BreadcrumbItem("Expenses", "/expenses"),
+            new PageHeader.BreadcrumbItem("Details")
+        ];
+
+        try
+        {
+            _expense = await GetExpenseCall.Call(new GetExpense { Id = Id });
+            if (_expense != null)
+            {
+                _breadcrumbs[1] = new PageHeader.BreadcrumbItem(_expense.MerchantName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading expense: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task DeleteExpenseAsync()
+    {
+        if (_expense == null) return;
+
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Expense",
+            new Dictionary<string, object>
+            {
+                { "ItemName", $"{_expense.MerchantName} - {CurrencyExtensions.GetSymbol(_expense.Currency)}{_expense.Amount:N2}" }
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (!confirmed) return;
+
+        _isDeleting = true;
+        try
+        {
+            await DeleteExpenseCall.Call(new DeleteExpense { Id = Id });
+            NavigationManager.NavigateTo("expenses");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting expense: {ex.Message}");
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+}

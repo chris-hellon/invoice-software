@@ -1,0 +1,191 @@
+@page "/account/manage/personal-data"
+
+@inject ICall<GetPersonalData, byte[]> GetPersonalDataCall
+@inject ICall<DeleteAccount> DeleteAccountCall
+
+<PageTitle>Personal Data - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <div>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-slate-100">Personal Data</h2>
+        <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">Download or delete your personal data.</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="@(_isError ? "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300" : "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300") p-4 rounded-xl border text-sm">
+            @_statusMessage
+        </div>
+    }
+
+    <!-- Download Personal Data -->
+    <div class="bg-gray-50 dark:bg-[#1a1827] rounded-xl p-6 border border-gray-200 dark:border-[#3d3a5c]">
+        <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+            </div>
+            <div class="flex-1">
+                <h3 class="font-medium text-gray-900 dark:text-slate-100">Download Your Data</h3>
+                <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">
+                    Download a copy of all personal data we have stored about you. This includes your account information, login providers, and authentication keys.
+                </p>
+                <button @onclick="DownloadPersonalData" disabled="@_isDownloading"
+                    class="mt-4 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-[#0f0e17] border border-gray-200 dark:border-[#3d3a5c] rounded-xl hover:bg-gray-50 dark:hover:bg-[#2d2a4a] transition-colors disabled:opacity-50">
+                    @if (_isDownloading)
+                    {
+                        <div class="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                        <span>Downloading...</span>
+                    }
+                    else
+                    {
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        <span>Download Personal Data</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Account -->
+    <div class="bg-red-50 dark:bg-red-900/20 rounded-xl p-6 border border-red-200 dark:border-red-800">
+        <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </div>
+            <div class="flex-1">
+                <h3 class="font-medium text-red-800 dark:text-red-200">Delete Your Account</h3>
+                <p class="text-sm text-red-700 dark:text-red-300 mt-1">
+                    Permanently delete your account and all associated data. This action cannot be undone.
+                </p>
+
+                @if (!_showDeleteConfirm)
+                {
+                    <button @onclick="() => _showDeleteConfirm = true"
+                        class="mt-4 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-[#0f0e17] border border-red-200 dark:border-red-800 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Delete Account
+                    </button>
+                }
+                else
+                {
+                    <div class="mt-4 space-y-4">
+                        <div class="bg-white dark:bg-[#0f0e17] rounded-lg p-4 border border-red-200 dark:border-red-800">
+                            <p class="text-sm font-medium text-red-800 dark:text-red-200 mb-3">
+                                Are you sure? This will permanently delete:
+                            </p>
+                            <ul class="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside mb-4">
+                                <li>Your account and profile</li>
+                                <li>All your invoices and clients</li>
+                                <li>All time entries and projects</li>
+                                <li>Any other associated data</li>
+                            </ul>
+                            <EditForm Model="_deleteInput" OnValidSubmit="DeleteAccount" class="space-y-4">
+                                <DataAnnotationsValidator />
+                                <div>
+                                    <label class="block text-sm font-medium text-red-800 dark:text-red-200 mb-2">
+                                        Enter your password to confirm
+                                    </label>
+                                    <InputText type="password" @bind-Value="_deleteInput.Password"
+                                        class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-red-200 dark:border-red-800 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-red-400 dark:focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
+                                        placeholder="Enter your password" />
+                                    <ValidationMessage For="() => _deleteInput.Password" class="mt-1.5 text-xs text-red-600 dark:text-red-400" />
+                                </div>
+                                <div class="flex gap-3">
+                                    <button type="submit" disabled="@_isDeleting"
+                                        class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-red-600 dark:bg-red-700 rounded-xl hover:bg-red-700 dark:hover:bg-red-600 transition-colors disabled:opacity-50">
+                                        @if (_isDeleting)
+                                        {
+                                            <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                            <span>Deleting...</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Yes, Delete My Account</span>
+                                        }
+                                    </button>
+                                    <button type="button" @onclick="() => _showDeleteConfirm = false"
+                                        class="px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </EditForm>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DeleteInputModel _deleteInput = new();
+    private bool _isDownloading;
+    private bool _isDeleting;
+    private bool _showDeleteConfirm;
+    private string? _statusMessage;
+    private bool _isError;
+
+    private async Task DownloadPersonalData()
+    {
+        _isDownloading = true;
+        _statusMessage = null;
+
+        try
+        {
+            var data = await GetPersonalDataCall.Call(new GetPersonalData());
+
+            // Trigger download via JS interop
+            await Js.InvokeVoidAsync("downloadFile", "PersonalData.json", "application/json", Convert.ToBase64String(data));
+
+            _statusMessage = "Your personal data has been downloaded.";
+            _isError = false;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error downloading data: {ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isDownloading = false;
+        }
+    }
+
+    private async Task DeleteAccount()
+    {
+        _isDeleting = true;
+        _statusMessage = null;
+
+        try
+        {
+            await DeleteAccountCall.Call(new DeleteAccount
+            {
+                Password = _deleteInput.Password
+            });
+
+            // Redirect to home after successful deletion
+            NavigationManager.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error: {ex.Message}";
+            _isError = true;
+            _isDeleting = false;
+        }
+    }
+
+    private class DeleteInputModel
+    {
+        [Required]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+    }
+}

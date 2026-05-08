@@ -1,0 +1,220 @@
+@page "/projects"
+
+@inject ICall<GetProjects, PaginatedResponse<ProjectDto>> GetProjectsCall
+@inject ICall<GetClients, PaginatedResponse<ClientDto>> GetClientsCall
+@inject ICall<DeleteProject> DeleteProjectCall
+@inject NavigationManager NavigationManager
+
+<PageTitle>Projects - InvoicePro</PageTitle>
+
+<ListPageLayout Title="Projects"
+                Description="Manage your projects across all clients."
+                ActionUrl="projects/new"
+                ActionText="New Project"
+                SearchPlaceholder="Search projects..."
+                SearchValue="@searchTerm"
+                SearchValueChanged="OnSearchChanged"
+                Breadcrumbs="@(new List<PageHeader.BreadcrumbItem> { new("Projects") })">
+    <Filters>
+        <select @bind="selectedClientId" @bind:after="OnFilterChanged" class="py-3 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="">All Clients</option>
+            @if (clientsForFilter != null)
+            {
+                @foreach (var client in clientsForFilter)
+                {
+                    <option value="@client.Id">@client.Name</option>
+                }
+            }
+        </select>
+        <select @bind="selectedStatus" @bind:after="OnFilterChanged" class="py-3 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="OnHold">On Hold</option>
+            <option value="Completed">Completed</option>
+            <option value="Archived">Archived</option>
+        </select>
+    </Filters>
+    <ChildContent>
+        @if (isLoading)
+        {
+            <LoadingGrid Variant="LoadingGrid.LoadingGridVariant.ProjectCard" />
+        }
+        else if (response == null || !response.Items.Any())
+        {
+            <EmptyState Title="No projects found"
+                        Message="@(HasActiveFilters ? "No projects match your filters. Try adjusting your search." : "Get started by creating your first project.")"
+                        IconType="EmptyState.EmptyStateIcon.Folder"
+                        ActionUrl="@(HasActiveFilters ? null : "projects/new")"
+                        ActionText="@(HasActiveFilters ? null : "New Project")" />
+        }
+        else
+        {
+            <CardGrid>
+                @foreach (var project in response.Items)
+                {
+                    <EntityCard Href="@($"projects/{project.Id}")"
+                                Title="@project.Name"
+                                Subtitle="@project.ClientName"
+                                ShowAvatar="false">
+                        <BadgeTemplate>
+                            <span class="@ProjectStatusExtensions.Parse(project.Status).GetBadgeClass() ml-2">@ProjectStatusExtensions.Parse(project.Status).GetDisplayName()</span>
+                        </BadgeTemplate>
+                        <DetailsTemplate>
+                            @if (!string.IsNullOrEmpty(project.Description))
+                            {
+                                <p class="text-sm text-gray-600 dark:text-slate-400 line-clamp-2 mb-4">@project.Description</p>
+                            }
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500 dark:text-slate-400">
+                                @if (project.StartDate.HasValue)
+                                {
+                                    <div class="flex items-center gap-1.5">
+                                        <svg class="w-4 h-4 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        <span>@project.StartDate.Value.ToString("MMM d, yyyy")</span>
+                                    </div>
+                                }
+                                <div class="flex items-center gap-1.5">
+                                    <svg class="w-4 h-4 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                    </svg>
+                                    <span>@project.JobCount jobs</span>
+                                </div>
+                            </div>
+                        </DetailsTemplate>
+                        <FooterTemplate>
+                            @if (project.HourlyRateOverride.HasValue)
+                            {
+                                <div class="text-sm">
+                                    <span class="text-gray-500 dark:text-slate-400">Rate:</span>
+                                    <span class="font-semibold text-gray-900 dark:text-slate-100 ml-1">$@project.HourlyRateOverride.Value.ToString("N2")</span>
+                                    <span class="text-gray-400 dark:text-slate-500">/hr</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="text-sm text-gray-400 dark:text-slate-500">Default rate</span>
+                            }
+                        </FooterTemplate>
+                        <ActionsTemplate>
+                            <IconButton Href="@($"projects/{project.Id}/edit")" Title="Edit">
+                                <EditIcon />
+                            </IconButton>
+                            <IconButton OnClick="() => DeleteProjectAsync(project)" Variant="IconButton.IconButtonVariant.Danger" Title="Delete">
+                                <DeleteIcon />
+                            </IconButton>
+                        </ActionsTemplate>
+                    </EntityCard>
+                }
+            </CardGrid>
+
+            <Pagination CurrentPage="response.Page"
+                        TotalItems="response.TotalCount"
+                        PageSize="response.PageSize"
+                        ItemName="projects"
+                        OnPageChanged="OnPageChanged" />
+        }
+    </ChildContent>
+</ListPageLayout>
+
+@code {
+    private PaginatedResponse<ProjectDto>? response;
+    private List<ClientDto>? clientsForFilter;
+    private bool isLoading = true;
+    private string searchTerm = "";
+    private string selectedClientId = "";
+    private string selectedStatus = "";
+    private int currentPage = 1;
+    private const int pageSize = 12;
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(searchTerm) || !string.IsNullOrEmpty(selectedStatus) || !string.IsNullOrEmpty(selectedClientId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var clientsResponse = await GetClientsCall.Call(new GetClients { PageSize = 1000 });
+            clientsForFilter = clientsResponse?.Items ?? [];
+            await LoadProjects();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading data: {ex.Message}");
+            response = new PaginatedResponse<ProjectDto>();
+            clientsForFilter = [];
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadProjects()
+    {
+        isLoading = true;
+        try
+        {
+            response = await GetProjectsCall.Call(new GetProjects
+            {
+                ClientId = string.IsNullOrEmpty(selectedClientId) ? null : Guid.Parse(selectedClientId),
+                Status = string.IsNullOrEmpty(selectedStatus) ? null : selectedStatus,
+                Page = currentPage,
+                PageSize = pageSize,
+                Search = searchTerm
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading projects: {ex.Message}");
+            response = new PaginatedResponse<ProjectDto>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        currentPage = 1;
+        await LoadProjects();
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        searchTerm = value;
+        currentPage = 1;
+        await LoadProjects();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        currentPage = page;
+        await LoadProjects();
+    }
+
+    private async Task DeleteProjectAsync(ProjectDto project)
+    {
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Project",
+            new Dictionary<string, object>
+            {
+                { "ItemName", project.Name },
+                { "WarningMessage", "All jobs, tasks, and time entries associated with this project will be permanently deleted." }
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (!confirmed) return;
+
+        try
+        {
+            await DeleteProjectCall.Call(new DeleteProject { Id = project.Id });
+            await LoadProjects();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting project: {ex.Message}");
+        }
+    }
+}

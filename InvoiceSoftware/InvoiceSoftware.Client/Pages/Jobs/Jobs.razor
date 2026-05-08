@@ -1,0 +1,199 @@
+@page "/jobs"
+
+@inject ICall<GetJobs, PaginatedResponse<JobDto>> GetJobsCall
+@inject ICall<DeleteJob> DeleteJobCall
+
+<PageTitle>Jobs - InvoicePro</PageTitle>
+
+<ListPageLayout Title="Jobs"
+                Description="Manage tasks and jobs across your projects."
+                ActionUrl="jobs/new"
+                ActionText="New Job"
+                SearchPlaceholder="Search jobs..."
+                SearchValue="@_searchTerm"
+                SearchValueChanged="OnSearchChanged"
+                Breadcrumbs="@(new List<PageHeader.BreadcrumbItem> { new("Jobs") })">
+    <Filters>
+        <select @bind="_selectedStatus" @bind:after="OnFilterChanged" class="py-3 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="OnHold">On Hold</option>
+            <option value="Completed">Completed</option>
+        </select>
+    </Filters>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <LoadingTable Rows="5" Columns="7" />
+        }
+        else if (_response == null || !_response.Items.Any())
+        {
+            <EmptyState Title="No jobs found"
+                        Message="@(HasActiveFilters ? "No jobs match your filters. Try adjusting your search." : "Get started by creating your first job.")"
+                        IconType="EmptyState.EmptyStateIcon.Clipboard"
+                        ActionUrl="@(HasActiveFilters ? null : "jobs/new")"
+                        ActionText="@(HasActiveFilters ? null : "New Job")" />
+        }
+        else
+        {
+            <DataTable TItem="JobDto"
+                       Items="_response.Items"
+                       CurrentPage="_response.Page"
+                       TotalCount="_response.TotalCount"
+                       PageSize="_response.PageSize"
+                       ItemName="jobs"
+                       OnPageChanged="OnPageChanged">
+                <HeaderTemplate>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Job</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Project</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Client</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Est. Hours</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Rate</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                    <th scope="col" class="relative px-6 py-4"><span class="sr-only">Actions</span></th>
+                </HeaderTemplate>
+                <RowTemplate Context="job">
+                    <tr class="group hover:bg-gray-50/50 dark:hover:bg-[#2d2a4a]/50 transition-colors">
+                        <td class="px-6 py-4">
+                            <a href="jobs/@job.Id" class="text-sm font-medium text-gray-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors hover:underline">@job.Name</a>
+                            @if (!string.IsNullOrEmpty(job.Description))
+                            {
+                                <div class="text-sm text-gray-500 dark:text-slate-400 truncate max-w-xs">@job.Description</div>
+                            }
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-medium text-gray-900 dark:text-slate-100">@job.ProjectName</div>
+                            @if (!string.IsNullOrEmpty(job.SectionName))
+                            {
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">@job.SectionName</span>
+                            }
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-900 dark:text-slate-100">@job.ClientName</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            @if (job.EstimatedHours.HasValue)
+                            {
+                                <div class="text-sm text-gray-900 dark:text-slate-100">@job.EstimatedHours.Value.ToString("N1") hrs</div>
+                            }
+                            else
+                            {
+                                <div class="text-sm text-gray-400 dark:text-slate-500">-</div>
+                            }
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            @if (job.HourlyRateOverride.HasValue)
+                            {
+                                <div class="text-sm text-gray-900 dark:text-slate-100">$@job.HourlyRateOverride.Value.ToString("N2")/hr</div>
+                            }
+                            else
+                            {
+                                <div class="text-sm text-gray-400 dark:text-slate-500">Default</div>
+                            }
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="@JobStatusExtensions.Parse(job.Status).GetBadgeClass()">@JobStatusExtensions.Parse(job.Status).GetDisplayName()</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <div class="flex items-center justify-end gap-1">
+                                <IconButton Href="@($"jobs/{job.Id}")" Title="View">
+                                    <ViewIcon />
+                                </IconButton>
+                                <IconButton Href="@($"jobs/{job.Id}/edit")" Title="Edit">
+                                    <EditIcon />
+                                </IconButton>
+                                <IconButton OnClick="() => DeleteJobAsync(job)" Variant="IconButton.IconButtonVariant.Danger" Title="Delete">
+                                    <DeleteIcon />
+                                </IconButton>
+                            </div>
+                        </td>
+                    </tr>
+                </RowTemplate>
+            </DataTable>
+        }
+    </ChildContent>
+</ListPageLayout>
+
+@code {
+    private PaginatedResponse<JobDto>? _response;
+    private bool _isLoading = true;
+    private string _searchTerm = "";
+    private string _selectedStatus = "";
+    private int _currentPage = 1;
+    private const int PageSize = 15;
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_searchTerm) || !string.IsNullOrEmpty(_selectedStatus);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadJobs();
+    }
+
+    private async Task LoadJobs()
+    {
+        _isLoading = true;
+        try
+        {
+            _response = await GetJobsCall.Call(new GetJobs
+            {
+                Status = string.IsNullOrEmpty(_selectedStatus) ? null : _selectedStatus,
+                Page = _currentPage,
+                PageSize = PageSize,
+                Search = _searchTerm
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading jobs: {ex.Message}");
+            _response = new PaginatedResponse<JobDto>();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        _currentPage = 1;
+        await LoadJobs();
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        _searchTerm = value;
+        _currentPage = 1;
+        await LoadJobs();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadJobs();
+    }
+
+    private async Task DeleteJobAsync(JobDto job)
+    {
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Job",
+            new Dictionary<string, object>
+            {
+                { "ItemName", job.Name },
+                { "WarningMessage", "All tasks and time entries associated with this job will be permanently deleted." }
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (!confirmed) return;
+
+        try
+        {
+            await DeleteJobCall.Call(new DeleteJob { Id = job.Id });
+            await LoadJobs();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting job: {ex.Message}");
+        }
+    }
+}

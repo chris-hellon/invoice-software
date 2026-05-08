@@ -1,0 +1,47 @@
+using InvoiceSoftware.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace InvoiceSoftware.Infrastructure.Data.Configurations;
+
+public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
+{
+    public void Configure(EntityTypeBuilder<Invoice> builder)
+    {
+        builder.ToTable("Invoices");
+
+        builder.HasKey(i => i.Id);
+
+        builder.Property(i => i.InvoiceNumber)
+            .HasMaxLength(50)
+            .IsRequired();
+
+        builder.HasIndex(i => i.InvoiceNumber)
+            .IsUnique();
+
+        builder.Property(i => i.IssueDate).IsRequired();
+        builder.Property(i => i.DueDate).IsRequired();
+
+        builder.Property(i => i.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
+        builder.Property(i => i.TaxRate).HasPrecision(5, 2);
+        builder.Property(i => i.Notes).HasMaxLength(2000);
+        builder.Property(i => i.Currency).HasMaxLength(3).HasDefaultValue("USD");
+
+        builder.HasOne(i => i.Client)
+            .WithMany()
+            .HasForeignKey(i => i.ClientId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Simple relationship: Invoice has many TimeEntries
+        builder.HasMany(i => i.TimeEntries)
+            .WithOne(te => te.Invoice)
+            .HasForeignKey(te => te.InvoiceId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(i => i.ClientId);
+        builder.HasIndex(i => i.Status);
+    }
+}

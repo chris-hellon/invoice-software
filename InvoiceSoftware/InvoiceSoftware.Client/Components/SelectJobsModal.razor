@@ -1,0 +1,469 @@
+@inject ICall<GetActiveJobs, List<ActiveJobDto>> GetActiveJobsCall
+@inject ICall<GetClients, PaginatedResponse<ClientDto>> GetClientsCall
+@inject ICall<GetProjects, PaginatedResponse<ProjectDto>> GetProjectsCall
+
+<div class="space-y-4">
+    <!-- Search and Filters -->
+    <div class="space-y-3">
+        <!-- Search Input -->
+        <div class="relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input type="text"
+                   @bind="_searchTerm"
+                   @bind:event="oninput"
+                   @onkeyup="OnSearchChanged"
+                   placeholder="Search jobs, projects, or clients..."
+                   class="w-full pl-10 pr-4 py-2.5 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300" />
+            @if (!string.IsNullOrEmpty(_searchTerm))
+            {
+                <button @onclick="ClearSearch"
+                        class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            }
+        </div>
+
+        <!-- Filter Dropdowns -->
+        <div class="flex gap-3">
+            <!-- Client Filter -->
+            <div class="flex-1">
+                <select @bind="_selectedClientId"
+                        @bind:after="ApplyFilters"
+                        class="w-full px-3 py-2 text-sm text-gray-700 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 transition-all duration-200">
+                    <option value="">All Clients</option>
+                    @foreach (var client in _clients)
+                    {
+                        <option value="@client.Id">@client.Name</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Project Filter -->
+            <div class="flex-1">
+                <select @bind="_selectedProjectId"
+                        @bind:after="ApplyFilters"
+                        class="w-full px-3 py-2 text-sm text-gray-700 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 transition-all duration-200">
+                    <option value="">All Projects</option>
+                    @foreach (var project in _filteredProjects)
+                    {
+                        <option value="@project.Id">@project.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <!-- Active Filters & Selected Count -->
+        <div class="flex items-center justify-between text-sm">
+            <div class="flex items-center gap-2">
+                @if (HasActiveFilters)
+                {
+                    <button @onclick="ClearFilters"
+                            class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Clear filters
+                    </button>
+                }
+                <span class="text-gray-500">@_filteredJobs.Count jobs found</span>
+            </div>
+            <div class="flex items-center gap-2">
+                @if (_selectedJobIds.Count > 0)
+                {
+                    <span class="px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 rounded-lg">
+                        @_selectedJobIds.Count selected
+                    </span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Job List -->
+    @if (_isLoading)
+    {
+        <div class="flex justify-center py-12">
+            <div class="w-8 h-8 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+    }
+    else if (!_pagedJobs.Any())
+    {
+        <div class="text-center py-8">
+            <div class="mx-auto w-12 h-12 rounded-xl flex items-center justify-center mb-3"
+                 style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);">
+                <svg class="h-6 w-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <p class="text-sm text-gray-500">No jobs match your filters.</p>
+            @if (HasActiveFilters)
+            {
+                <button @onclick="ClearFilters"
+                        class="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-700">
+                    Clear filters
+                </button>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="border border-gray-200 rounded-xl overflow-hidden">
+            <!-- Select All Header -->
+            <div class="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox"
+                           checked="@IsAllPageSelected"
+                           @onchange="TogglePageSelection"
+                           class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
+                    <span class="text-xs font-medium text-gray-600">Select all on this page</span>
+                </label>
+                @if (_selectedJobIds.Count > 0)
+                {
+                    <button @onclick="ClearSelection"
+                            class="text-xs font-medium text-gray-500 hover:text-gray-700">
+                        Clear selection
+                    </button>
+                }
+            </div>
+
+            <!-- Job Items -->
+            <div class="max-h-72 overflow-y-auto divide-y divide-gray-100">
+                @foreach (var job in _pagedJobs)
+                {
+                    var isSelected = _selectedJobIds.Contains(job.Id);
+                    <div @onclick="() => ToggleJobSelection(job.Id)"
+                         class="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors @(isSelected ? "bg-indigo-50" : "hover:bg-gray-50")">
+                        <div class="flex-shrink-0">
+                            <div class="w-5 h-5 rounded border-2 flex items-center justify-center transition-colors @(isSelected ? "bg-indigo-600 border-indigo-600" : "border-gray-300")">
+                                @if (isSelected)
+                                {
+                                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                }
+                            </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-gray-900 truncate">@job.Name</div>
+                            <div class="flex items-center gap-2 text-xs text-gray-500">
+                                <span class="truncate">@job.ProjectName</span>
+                                <span class="text-gray-300">&bull;</span>
+                                <span class="truncate">@job.ClientName</span>
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0 text-right">
+                            <div class="text-sm font-medium text-gray-900">@job.HourlyRate.ToString("C")</div>
+                            <div class="text-xs text-gray-500">/hour</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        @if (TotalPages > 1)
+        {
+            <div class="flex items-center justify-between pt-2">
+                <button @onclick="PreviousPage"
+                        disabled="@(_currentPage == 1)"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Previous
+                </button>
+
+                <div class="flex items-center gap-1">
+                    @foreach (var pageNum in GetPageNumbers())
+                    {
+                        if (pageNum == -1)
+                        {
+                            <span class="px-2 text-gray-400">...</span>
+                        }
+                        else
+                        {
+                            <button @onclick="() => GoToPage(pageNum)"
+                                    class="w-8 h-8 text-sm font-medium rounded-lg transition-colors @(pageNum == _currentPage ? "bg-indigo-600 text-white" : "text-gray-700 hover:bg-gray-100")">
+                                @pageNum
+                            </button>
+                        }
+                    }
+                </div>
+
+                <button @onclick="NextPage"
+                        disabled="@(_currentPage == TotalPages)"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    Next
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+            </div>
+        }
+    }
+
+    <!-- Footer Actions -->
+    <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+        <button @onclick="Cancel"
+                class="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+            Cancel
+        </button>
+        <button @onclick="Apply"
+                class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+                style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">
+            Apply Selection (@_selectedJobIds.Count)
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public HashSet<Guid>? InitialSelection { get; set; }
+
+    private List<ActiveJobDto> _allJobs = [];
+    private List<ActiveJobDto> _filteredJobs = [];
+    private List<ActiveJobDto> _pagedJobs = [];
+    private List<ClientDto> _clients = [];
+    private List<ProjectDto> _projects = [];
+    private List<ProjectDto> _filteredProjects = [];
+
+    private HashSet<Guid> _selectedJobIds = [];
+    private string _searchTerm = "";
+    private string _selectedClientId = "";
+    private string _selectedProjectId = "";
+    private bool _isLoading = true;
+
+    // Pagination
+    private int _currentPage = 1;
+    private int _pageSize = 8;
+    private int TotalPages => (int)Math.Ceiling((double)_filteredJobs.Count / _pageSize);
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_searchTerm) ||
+                                     !string.IsNullOrEmpty(_selectedClientId) ||
+                                     !string.IsNullOrEmpty(_selectedProjectId);
+
+    private bool IsAllPageSelected => _pagedJobs.Any() && _pagedJobs.All(j => _selectedJobIds.Contains(j.Id));
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Copy initial selection
+        if (InitialSelection != null)
+        {
+            _selectedJobIds = new HashSet<Guid>(InitialSelection);
+        }
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            // Load data sequentially to avoid DbContext concurrency issues
+            _allJobs = await GetActiveJobsCall.Call(new GetActiveJobs()) ?? [];
+            var clientsResponse = await GetClientsCall.Call(new GetClients { ActiveOnly = true, PageSize = 1000 });
+            _clients = clientsResponse?.Items ?? [];
+            var projectsResponse = await GetProjectsCall.Call(new GetProjects { PageSize = 1000 });
+            _projects = projectsResponse?.Items ?? [];
+            _filteredProjects = _projects;
+
+            ApplyFilters();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSearchChanged()
+    {
+        ApplyFilters();
+    }
+
+    private void ClearSearch()
+    {
+        _searchTerm = "";
+        ApplyFilters();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = "";
+        _selectedClientId = "";
+        _selectedProjectId = "";
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        // Update filtered projects based on selected client
+        if (!string.IsNullOrEmpty(_selectedClientId) && Guid.TryParse(_selectedClientId, out var clientId))
+        {
+            _filteredProjects = _projects.Where(p => p.ClientId == clientId).ToList();
+            // Reset project selection if it's no longer valid
+            if (!string.IsNullOrEmpty(_selectedProjectId) && Guid.TryParse(_selectedProjectId, out var projId))
+            {
+                if (!_filteredProjects.Any(p => p.Id == projId))
+                {
+                    _selectedProjectId = "";
+                }
+            }
+        }
+        else
+        {
+            _filteredProjects = _projects;
+        }
+
+        // Filter jobs
+        var query = _allJobs.AsEnumerable();
+
+        // Text search
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            var term = _searchTerm.Trim().ToLowerInvariant();
+            query = query.Where(j =>
+                j.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                j.ProjectName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                j.ClientName.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Client filter
+        if (!string.IsNullOrEmpty(_selectedClientId) && Guid.TryParse(_selectedClientId, out var cId))
+        {
+            var clientName = _clients.FirstOrDefault(c => c.Id == cId)?.Name;
+            if (clientName != null)
+            {
+                query = query.Where(j => j.ClientName == clientName);
+            }
+        }
+
+        // Project filter
+        if (!string.IsNullOrEmpty(_selectedProjectId) && Guid.TryParse(_selectedProjectId, out var pId))
+        {
+            var projectName = _projects.FirstOrDefault(p => p.Id == pId)?.Name;
+            if (projectName != null)
+            {
+                query = query.Where(j => j.ProjectName == projectName);
+            }
+        }
+
+        _filteredJobs = query.OrderBy(j => j.ClientName).ThenBy(j => j.ProjectName).ThenBy(j => j.Name).ToList();
+
+        // Reset to first page when filters change
+        _currentPage = 1;
+        UpdatePagedJobs();
+    }
+
+    private void UpdatePagedJobs()
+    {
+        _pagedJobs = _filteredJobs
+            .Skip((_currentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
+    }
+
+    private void ToggleJobSelection(Guid jobId)
+    {
+        if (_selectedJobIds.Contains(jobId))
+        {
+            _selectedJobIds.Remove(jobId);
+        }
+        else
+        {
+            _selectedJobIds.Add(jobId);
+        }
+    }
+
+    private void TogglePageSelection()
+    {
+        if (IsAllPageSelected)
+        {
+            // Deselect all on current page
+            foreach (var job in _pagedJobs)
+            {
+                _selectedJobIds.Remove(job.Id);
+            }
+        }
+        else
+        {
+            // Select all on current page
+            foreach (var job in _pagedJobs)
+            {
+                _selectedJobIds.Add(job.Id);
+            }
+        }
+    }
+
+    private void ClearSelection()
+    {
+        _selectedJobIds.Clear();
+    }
+
+    private void PreviousPage()
+    {
+        if (_currentPage > 1)
+        {
+            _currentPage--;
+            UpdatePagedJobs();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_currentPage < TotalPages)
+        {
+            _currentPage++;
+            UpdatePagedJobs();
+        }
+    }
+
+    private void GoToPage(int page)
+    {
+        _currentPage = page;
+        UpdatePagedJobs();
+    }
+
+    private IEnumerable<int> GetPageNumbers()
+    {
+        var pages = new List<int>();
+        var maxVisible = 5;
+
+        if (TotalPages <= maxVisible)
+        {
+            for (int i = 1; i <= TotalPages; i++)
+                pages.Add(i);
+        }
+        else
+        {
+            pages.Add(1);
+
+            var start = Math.Max(2, _currentPage - 1);
+            var end = Math.Min(TotalPages - 1, _currentPage + 1);
+
+            if (start > 2)
+                pages.Add(-1); // ellipsis
+
+            for (int i = start; i <= end; i++)
+                pages.Add(i);
+
+            if (end < TotalPages - 1)
+                pages.Add(-1); // ellipsis
+
+            pages.Add(TotalPages);
+        }
+
+        return pages;
+    }
+
+    private void Cancel()
+    {
+        ModalService.Cancel();
+    }
+
+    private void Apply()
+    {
+        ModalService.Close(_selectedJobIds);
+    }
+}

@@ -1,0 +1,275 @@
+<!-- Filters -->
+<div class="px-6 py-4 border-b border-gray-100 dark:border-[#2d2a4a] bg-gray-50/30 dark:bg-[#1a1827]/50">
+    <div class="flex flex-wrap gap-4 items-end">
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Date Range</label>
+            <div class="flex items-center gap-2">
+                <input type="date" @bind="filterStartDate" @bind:after="ApplyFilters"
+                       class="flex-1 px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-lg focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10" />
+                <span class="text-gray-400 dark:text-slate-500 text-sm">to</span>
+                <input type="date" @bind="filterEndDate" @bind:after="ApplyFilters"
+                       class="flex-1 px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-lg focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10" />
+            </div>
+        </div>
+        <div class="min-w-[180px]">
+            <label class="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Category</label>
+            <select @bind="filterCategory" @bind:after="ApplyFilters"
+                    class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-lg focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10">
+                <option value="">All Categories</option>
+                @foreach (var category in AvailableCategories)
+                {
+                    <option value="@category">@ExpenseCategoryExtensions.Parse(category).GetDisplayName()</option>
+                }
+            </select>
+        </div>
+        <button @onclick="ClearFilters" class="px-3 py-2 text-sm text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-[#2d2a4a] rounded-lg transition-colors">
+            Clear filters
+        </button>
+    </div>
+</div>
+
+@if (IsLoading)
+{
+    <div class="flex justify-center py-12">
+        <div class="w-8 h-8 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+    </div>
+}
+else if (!filteredExpenses?.Any() ?? true)
+{
+    <div class="py-12 text-center">
+        <svg class="w-12 h-12 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+        </svg>
+        <p class="text-sm text-gray-500">No unbilled expenses found</p>
+        @if (HasActiveFilters)
+        {
+            <button @onclick="ClearFilters" class="mt-2 text-sm text-indigo-600 hover:text-indigo-700">
+                Clear filters to see all expenses
+            </button>
+        }
+    </div>
+}
+else
+{
+    <!-- Grouped by Category -->
+    @foreach (var categoryGroup in filteredExpenses.GroupBy(e => e.Category).OrderBy(g => g.Key))
+    {
+        var categoryExpenses = categoryGroup.ToList();
+        var categoryTotal = categoryExpenses.Sum(e => e.Amount + e.TaxAmount);
+        var allCategorySelected = categoryExpenses.All(e => SelectedExpenseIds.Contains(e.Id));
+        var someCategorySelected = categoryExpenses.Any(e => SelectedExpenseIds.Contains(e.Id));
+        var isExpanded = expandedCategories.Contains(categoryGroup.Key);
+        var categoryDisplayName = ExpenseCategoryExtensions.Parse(categoryGroup.Key).GetDisplayName();
+
+        <div class="border-b border-gray-100 dark:border-[#2d2a4a] last:border-b-0">
+            <!-- Category Header -->
+            <div class="px-6 py-3 bg-gray-50/50 dark:bg-[#1a1827]/50 flex items-center gap-4 cursor-pointer hover:bg-gray-100/50 dark:hover:bg-[#2d2a4a]/50 transition-colors"
+                 @onclick="() => ToggleCategoryExpand(categoryGroup.Key)">
+                <button type="button" class="text-gray-400 dark:text-slate-500">
+                    <svg class="w-4 h-4 transition-transform @(isExpanded ? "rotate-90" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+                <input type="checkbox" checked="@allCategorySelected"
+                       @onclick:stopPropagation="true"
+                       @onchange="() => ToggleCategorySelection(categoryGroup.Key)"
+                       class="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 dark:border-slate-600 rounded cursor-pointer @(someCategorySelected && !allCategorySelected ? "indeterminate" : "")" />
+                <div class="flex-1">
+                    <span class="text-sm font-medium text-gray-900 dark:text-slate-100">@categoryDisplayName</span>
+                    <span class="ml-2 text-xs text-gray-500 dark:text-slate-400">(@categoryExpenses.Count expenses)</span>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm font-medium text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(Currency)@categoryTotal.ToString("N2")</div>
+                </div>
+            </div>
+
+            <!-- Category Expenses (collapsible) -->
+            @if (isExpanded)
+            {
+                <div class="divide-y divide-gray-100 dark:divide-[#2d2a4a]">
+                    @foreach (var expense in categoryExpenses.OrderByDescending(e => e.ExpenseDate))
+                    {
+                        var isSelected = SelectedExpenseIds.Contains(expense.Id);
+                        var expenseTotal = expense.Amount + expense.TaxAmount;
+                        <div class="px-6 py-3 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-[#2d2a4a]/50 transition-colors cursor-pointer @(isSelected ? "bg-emerald-50/50 dark:bg-emerald-900/20" : "")"
+                             @onclick="() => ToggleExpense(expense)">
+                            <div class="w-4"></div>
+                            <input type="checkbox" checked="@isSelected"
+                                   @onclick:stopPropagation="true"
+                                   @onchange="() => ToggleExpense(expense)"
+                                   class="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 dark:border-slate-600 rounded cursor-pointer" />
+                            <div class="w-24 text-sm text-gray-500 dark:text-slate-400">@expense.ExpenseDate.ToString("MMM d")</div>
+                            <div class="flex-1">
+                                <div class="text-sm text-gray-900 dark:text-slate-100">@expense.MerchantName</div>
+                                @if (!string.IsNullOrEmpty(expense.ProjectName))
+                                {
+                                    <div class="text-xs text-gray-500 dark:text-slate-400">@expense.ProjectName</div>
+                                }
+                            </div>
+                            <div class="w-28 text-right text-sm font-medium text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(expense.Currency)@expenseTotal.ToString("N2")</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Selection Summary -->
+    @if (SelectedExpenseIds.Any())
+    {
+        <div class="px-6 py-4 bg-emerald-50 dark:bg-emerald-900/30 border-t border-emerald-100 dark:border-emerald-800">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-800 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-emerald-800 dark:text-emerald-200">@SelectedExpenseIds.Count expenses selected</div>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-lg font-bold text-emerald-700 dark:text-emerald-300">@(ShowAddPrefix ? "+" : "")@CurrencyExtensions.GetSymbol(Currency)@SelectedTotal.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public List<ExpenseSummaryDto>? Expenses { get; set; }
+
+    [Parameter]
+    public string Currency { get; set; } = "USD";
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool ShowAddPrefix { get; set; }
+
+    [Parameter]
+    public HashSet<Guid> SelectedExpenseIds { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<HashSet<Guid>> SelectedExpenseIdsChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<ExpenseSummaryDto> OnExpenseToggled { get; set; }
+
+    // Filter state
+    private DateOnly filterStartDate;
+    private DateOnly filterEndDate;
+    private string filterCategory = "";
+    private readonly DateOnly defaultStartDate = DateOnly.FromDateTime(DateTime.Today.AddMonths(-3));
+    private readonly DateOnly defaultEndDate = DateOnly.FromDateTime(DateTime.Today);
+
+    // UI state
+    private HashSet<string> expandedCategories = [];
+    private List<ExpenseSummaryDto>? filteredExpenses;
+
+    // Computed
+    private IEnumerable<string> AvailableCategories => Expenses?.Select(e => e.Category)
+        .Distinct()
+        .OrderBy(c => c) ?? Enumerable.Empty<string>();
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrEmpty(filterCategory) ||
+        filterStartDate != defaultStartDate ||
+        filterEndDate != defaultEndDate;
+
+    private decimal SelectedTotal => Expenses != null ? Expenses.Where(e => SelectedExpenseIds.Contains(e.Id))
+        .Sum(e => e.Amount + e.TaxAmount) : 0;
+
+    protected override void OnInitialized()
+    {
+        filterStartDate = defaultStartDate;
+        filterEndDate = defaultEndDate;
+    }
+
+    protected override void OnParametersSet()
+    {
+        ApplyFilters();
+
+        // Expand first category by default if none expanded
+        if (!expandedCategories.Any() && (filteredExpenses?.Any() ?? false))
+        {
+            var firstCategory = filteredExpenses.Select(e => e.Category).FirstOrDefault();
+            if (firstCategory != null)
+            {
+                expandedCategories.Add(firstCategory);
+            }
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        if (Expenses == null)
+        {
+            filteredExpenses = [];
+            return;
+        }
+
+        filteredExpenses = Expenses
+            .Where(e => e.ExpenseDate >= filterStartDate && e.ExpenseDate <= filterEndDate)
+            .Where(e => string.IsNullOrEmpty(filterCategory) || e.Category == filterCategory)
+            .ToList();
+    }
+
+    private void ClearFilters()
+    {
+        filterStartDate = defaultStartDate;
+        filterEndDate = defaultEndDate;
+        filterCategory = "";
+        ApplyFilters();
+    }
+
+    private void ToggleCategoryExpand(string category)
+    {
+        if (expandedCategories.Contains(category))
+            expandedCategories.Remove(category);
+        else
+            expandedCategories.Add(category);
+    }
+
+    private async Task ToggleCategorySelection(string category)
+    {
+        var categoryExpenses = filteredExpenses != null ? filteredExpenses.Where(e => e.Category == category).ToList() : [];
+        var allSelected = categoryExpenses.All(e => SelectedExpenseIds.Contains(e.Id));
+
+        if (allSelected)
+        {
+            foreach (var expense in categoryExpenses)
+            {
+                SelectedExpenseIds.Remove(expense.Id);
+            }
+        }
+        else
+        {
+            foreach (var expense in categoryExpenses)
+            {
+                SelectedExpenseIds.Add(expense.Id);
+            }
+        }
+
+        expandedCategories.Add(category);
+        await SelectedExpenseIdsChanged.InvokeAsync(SelectedExpenseIds);
+    }
+
+    private async Task ToggleExpense(ExpenseSummaryDto expense)
+    {
+        if (SelectedExpenseIds.Contains(expense.Id))
+        {
+            SelectedExpenseIds.Remove(expense.Id);
+        }
+        else
+        {
+            SelectedExpenseIds.Add(expense.Id);
+        }
+
+        await SelectedExpenseIdsChanged.InvokeAsync(SelectedExpenseIds);
+        await OnExpenseToggled.InvokeAsync(expense);
+    }
+}

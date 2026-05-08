@@ -1,0 +1,305 @@
+<!-- Filters -->
+<div class="px-6 py-4 border-b border-gray-100 dark:border-[#2d2a4a] bg-gray-50/30 dark:bg-[#1a1827]/50">
+    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 items-end">
+        <div>
+            <label class="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">From</label>
+            <input type="date" @bind="filterStartDate" @bind:after="ApplyFilters"
+                   class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-lg focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10" />
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">To</label>
+            <input type="date" @bind="filterEndDate" @bind:after="ApplyFilters"
+                   class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-lg focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10" />
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Project</label>
+            <select @bind="filterProjectName" @bind:after="ApplyFilters"
+                    class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-lg focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 truncate">
+                <option value="">All Projects</option>
+                @foreach (var project in AvailableProjects)
+                {
+                    <option value="@project">@project</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Job</label>
+            <select @bind="filterJobName" @bind:after="ApplyFilters"
+                    class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1a1827] border border-gray-200 dark:border-[#3d3a5c] rounded-lg focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 truncate">
+                <option value="">All Jobs</option>
+                @foreach (var job in AvailableJobs)
+                {
+                    <option value="@job">@job</option>
+                }
+            </select>
+        </div>
+        <div class="col-span-2 sm:col-span-4 lg:col-span-2 flex justify-end">
+            <button @onclick="ClearFilters" class="px-3 py-2 text-sm text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-[#2d2a4a] rounded-lg transition-colors">
+                Clear filters
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (IsLoading)
+{
+    <div class="flex justify-center py-12">
+        <div class="w-8 h-8 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+    </div>
+}
+else if (!filteredEntries?.Any() ?? true)
+{
+    <div class="py-12 text-center">
+        <svg class="w-12 h-12 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p class="text-sm text-gray-500">No unbilled time entries found</p>
+        @if (HasActiveFilters)
+        {
+            <button @onclick="ClearFilters" class="mt-2 text-sm text-indigo-600 hover:text-indigo-700">
+                Clear filters to see all entries
+            </button>
+        }
+    </div>
+}
+else
+{
+    <!-- Grouped by Project -->
+    @foreach (var projectGroup in filteredEntries.GroupBy(e => e.ProjectName).OrderBy(g => g.Key))
+    {
+        var projectEntries = projectGroup.ToList();
+        var projectTotal = projectEntries.Sum(e => e.Hours * e.HourlyRate);
+        var projectHours = projectEntries.Sum(e => e.Hours);
+        var allProjectSelected = projectEntries.All(e => SelectedEntryIds.Contains(e.Id));
+        var someProjectSelected = projectEntries.Any(e => SelectedEntryIds.Contains(e.Id));
+        var isExpanded = expandedProjects.Contains(projectGroup.Key);
+
+        <div class="border-b border-gray-100 dark:border-[#2d2a4a] last:border-b-0">
+            <!-- Project Header -->
+            <div class="px-6 py-3 bg-gray-50/50 dark:bg-[#1a1827]/50 flex items-center gap-4 cursor-pointer hover:bg-gray-100/50 dark:hover:bg-[#2d2a4a]/50 transition-colors"
+                 @onclick="() => ToggleProjectExpand(projectGroup.Key)">
+                <button type="button" class="text-gray-400 dark:text-slate-500">
+                    <svg class="w-4 h-4 transition-transform @(isExpanded ? "rotate-90" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+                <input type="checkbox" checked="@allProjectSelected"
+                       @onclick:stopPropagation="true"
+                       @onchange="() => ToggleProjectSelection(projectGroup.Key)"
+                       class="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 dark:border-slate-600 rounded cursor-pointer @(someProjectSelected && !allProjectSelected ? "indeterminate" : "")" />
+                <div class="flex-1">
+                    <span class="text-sm font-medium text-gray-900 dark:text-slate-100">@projectGroup.Key</span>
+                    <span class="ml-2 text-xs text-gray-500 dark:text-slate-400">(@projectEntries.Count entries)</span>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm font-medium text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(Currency)@projectTotal.ToString("N2")</div>
+                    <div class="text-xs text-gray-500 dark:text-slate-400">@projectHours.ToString("N1") hrs</div>
+                </div>
+            </div>
+
+            <!-- Project Entries (collapsible) -->
+            @if (isExpanded)
+            {
+                <div class="divide-y divide-gray-100 dark:divide-[#2d2a4a]">
+                    @foreach (var entry in projectEntries.OrderByDescending(e => e.Date))
+                    {
+                        var isSelected = SelectedEntryIds.Contains(entry.Id);
+                        <div class="px-6 py-3 flex items-center gap-4 hover:bg-gray-50/50 dark:hover:bg-[#2d2a4a]/50 transition-colors cursor-pointer @(isSelected ? "bg-emerald-50/50 dark:bg-emerald-900/20" : "")"
+                             @onclick="() => ToggleEntry(entry)">
+                            <div class="w-4"></div>
+                            <input type="checkbox" checked="@isSelected"
+                                   @onclick:stopPropagation="true"
+                                   @onchange="() => ToggleEntry(entry)"
+                                   class="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 dark:border-slate-600 rounded cursor-pointer" />
+                            <div class="w-24 text-sm text-gray-500 dark:text-slate-400">@entry.Date.ToString("MMM d")</div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm text-gray-900 dark:text-slate-100">@entry.JobName</span>
+                                    @if (!string.IsNullOrEmpty(entry.SectionName))
+                                    {
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">@entry.SectionName</span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="w-20 text-right text-sm text-gray-500 dark:text-slate-400">@entry.Hours.ToString("N2") hrs</div>
+                            <div class="w-24 text-right text-sm text-gray-500 dark:text-slate-400">@CurrencyExtensions.GetSymbol(entry.Currency)@entry.HourlyRate.ToString("N2")/hr</div>
+                            <div class="w-28 text-right text-sm font-medium text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(entry.Currency)@((entry.Hours * entry.HourlyRate).ToString("N2"))</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Selection Summary -->
+    @if (SelectedEntryIds.Any())
+    {
+        <div class="px-6 py-4 bg-emerald-50 dark:bg-emerald-900/30 border-t border-emerald-100 dark:border-emerald-800">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-800 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-emerald-800 dark:text-emerald-200">@SelectedEntryIds.Count entries selected</div>
+                        <div class="text-xs text-emerald-600 dark:text-emerald-400">@SelectedHours.ToString("N1") hours total</div>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-lg font-bold text-emerald-700 dark:text-emerald-300">@(ShowAddPrefix ? "+" : "")@CurrencyExtensions.GetSymbol(Currency)@SelectedTotal.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public List<UnbilledTimeEntryDto>? Entries { get; set; }
+
+    [Parameter]
+    public string Currency { get; set; } = "USD";
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool ShowAddPrefix { get; set; }
+
+    [Parameter]
+    public HashSet<Guid> SelectedEntryIds { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<HashSet<Guid>> SelectedEntryIdsChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<UnbilledTimeEntryDto> OnEntryToggled { get; set; }
+
+    // Filter state
+    private DateOnly filterStartDate;
+    private DateOnly filterEndDate;
+    private string filterProjectName = "";
+    private string filterJobName = "";
+    private readonly DateOnly defaultStartDate = DateOnly.FromDateTime(DateTime.Today.AddMonths(-3));
+    private readonly DateOnly defaultEndDate = DateOnly.FromDateTime(DateTime.Today);
+
+    // UI state
+    private HashSet<string> expandedProjects = [];
+    private List<UnbilledTimeEntryDto>? filteredEntries;
+
+    // Computed
+    private IEnumerable<string> AvailableProjects => Entries?.Select(e => e.ProjectName)
+        .Distinct()
+        .OrderBy(p => p) ?? Enumerable.Empty<string>();
+
+    private IEnumerable<string> AvailableJobs => Entries?.Where(e => string.IsNullOrEmpty(filterProjectName) || e.ProjectName == filterProjectName)
+        .Select(e => e.JobName)
+        .Distinct()
+        .OrderBy(j => j) ?? Enumerable.Empty<string>();
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrEmpty(filterProjectName) ||
+        !string.IsNullOrEmpty(filterJobName) ||
+        filterStartDate != defaultStartDate ||
+        filterEndDate != defaultEndDate;
+
+    private decimal SelectedTotal => Entries != null ? Entries.Where(e => SelectedEntryIds.Contains(e.Id))
+        .Sum(e => e.Hours * e.HourlyRate) : 0;
+
+    private decimal SelectedHours => Entries != null ? Entries.Where(e => SelectedEntryIds.Contains(e.Id))
+        .Sum(e => e.Hours) : 0;
+
+    protected override void OnInitialized()
+    {
+        filterStartDate = defaultStartDate;
+        filterEndDate = defaultEndDate;
+    }
+
+    protected override void OnParametersSet()
+    {
+        ApplyFilters();
+
+        // Expand first project by default if none expanded
+        if (!expandedProjects.Any() && (filteredEntries?.Any() ?? false))
+        {
+            var firstProject = filteredEntries.Select(e => e.ProjectName).FirstOrDefault();
+            if (firstProject != null)
+            {
+                expandedProjects.Add(firstProject);
+            }
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        if (Entries == null)
+        {
+            filteredEntries = [];
+            return;
+        }
+
+        filteredEntries = Entries
+            .Where(e => e.Date >= filterStartDate && e.Date <= filterEndDate)
+            .Where(e => string.IsNullOrEmpty(filterProjectName) || e.ProjectName == filterProjectName)
+            .Where(e => string.IsNullOrEmpty(filterJobName) || e.JobName == filterJobName)
+            .ToList();
+    }
+
+    private void ClearFilters()
+    {
+        filterStartDate = defaultStartDate;
+        filterEndDate = defaultEndDate;
+        filterProjectName = "";
+        filterJobName = "";
+        ApplyFilters();
+    }
+
+    private void ToggleProjectExpand(string projectName)
+    {
+        if (expandedProjects.Contains(projectName))
+            expandedProjects.Remove(projectName);
+        else
+            expandedProjects.Add(projectName);
+    }
+
+    private async Task ToggleProjectSelection(string projectName)
+    {
+        var projectEntries = filteredEntries != null ? filteredEntries.Where(e => e.ProjectName == projectName).ToList() : [];
+        var allSelected = projectEntries.All(e => SelectedEntryIds.Contains(e.Id));
+
+        if (allSelected)
+        {
+            foreach (var entry in projectEntries)
+            {
+                SelectedEntryIds.Remove(entry.Id);
+            }
+        }
+        else
+        {
+            foreach (var entry in projectEntries)
+            {
+                SelectedEntryIds.Add(entry.Id);
+            }
+        }
+
+        expandedProjects.Add(projectName);
+        await SelectedEntryIdsChanged.InvokeAsync(SelectedEntryIds);
+    }
+
+    private async Task ToggleEntry(UnbilledTimeEntryDto entry)
+    {
+        if (SelectedEntryIds.Contains(entry.Id))
+        {
+            SelectedEntryIds.Remove(entry.Id);
+        }
+        else
+        {
+            SelectedEntryIds.Add(entry.Id);
+        }
+
+        await SelectedEntryIdsChanged.InvokeAsync(SelectedEntryIds);
+        await OnEntryToggled.InvokeAsync(entry);
+    }
+}

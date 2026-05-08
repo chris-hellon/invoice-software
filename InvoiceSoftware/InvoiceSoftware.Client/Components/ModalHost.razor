@@ -1,0 +1,91 @@
+@implements IDisposable
+
+@if (_activeModal is not null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <!-- Backdrop -->
+            <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity"
+                 @onclick="OnBackdropClick"></div>
+
+            <!-- Centering trick -->
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <!-- Modal Panel -->
+            <div class="relative inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle w-full @GetSizeClass()">
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                    <h3 id="modal-title" class="text-lg font-semibold text-gray-900" style="font-family: 'Plus Jakarta Sans', sans-serif;">
+                        @_activeModal.Title
+                    </h3>
+                    @if (_activeModal.Options.ShowCloseButton)
+                    {
+                        <button @onclick="OnClose"
+                                class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    }
+                </div>
+
+                <!-- Content -->
+                <div class="px-6 py-4">
+                    <DynamicComponent Type="@_activeModal.ComponentType" Parameters="@GetParameters()" />
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private ModalInstance? _activeModal;
+
+    protected override void OnInitialized()
+    {
+        ModalService.OnChange += HandleModalChange;
+    }
+
+    private void HandleModalChange()
+    {
+        _activeModal = ModalService.ActiveModal;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Dictionary<string, object> GetParameters()
+    {
+        // Modal components get ModalService via @inject in _Imports.razor, so no need to pass it as a parameter
+        return new Dictionary<string, object>(_activeModal != null ? _activeModal.Parameters : new());
+    }
+
+    private string GetSizeClass()
+    {
+        return _activeModal?.Options.Size switch
+        {
+            ModalSize.Small => "sm:max-w-sm",
+            ModalSize.Medium => "sm:max-w-lg",
+            ModalSize.Large => "sm:max-w-2xl",
+            ModalSize.XLarge => "sm:max-w-4xl",
+            ModalSize.Full => "sm:max-w-6xl",
+            _ => "sm:max-w-lg"
+        };
+    }
+
+    private void OnBackdropClick()
+    {
+        if (_activeModal != null ? _activeModal.Options.CloseOnBackdropClick : false)
+        {
+            ModalService.Cancel();
+        }
+    }
+
+    private void OnClose()
+    {
+        ModalService.Cancel();
+    }
+
+    public void Dispose()
+    {
+        ModalService.OnChange -= HandleModalChange;
+    }
+}

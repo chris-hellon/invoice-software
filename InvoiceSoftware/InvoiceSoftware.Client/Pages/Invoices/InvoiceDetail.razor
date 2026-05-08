@@ -1,0 +1,448 @@
+@page "/invoices/{Id:guid}"
+
+@inject ICall<GetInvoice, InvoiceDetailDto> GetInvoiceCall
+@inject ICall<GetInvoicePdf, byte[]> GetInvoicePdfCall
+@inject ICall<MarkInvoicePaid> MarkInvoicePaidCall
+@inject ICall<DeleteInvoice> DeleteInvoiceCall
+@inject ICall<SendInvoice> SendInvoiceCall
+@inject ICall<GetBusinessProfile, BusinessProfileDto> GetBusinessProfileCall
+@inject ICall<GetBusinessLogo, byte[]> GetBusinessLogoCall
+@inject ICall<GetCurrencyPaymentSettings, CurrencyPaymentSettingsDto> GetCurrencyPaymentSettingsCall
+@inject IJSRuntime JS
+
+<PageTitle>@(_invoice != null ? _invoice.InvoiceNumber : "Invoice") - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <PageHeader Title="@(_invoice?.InvoiceNumber ?? "Loading...")"
+                Description="@(_invoice != null ? $"Invoice for {_invoice.ClientName}" : "")"
+                ShowBackButton="true"
+                BackUrl="invoices"
+                Breadcrumbs="@_breadcrumbs">
+        <Actions>
+            @if (_invoice != null)
+            {
+                <div class="flex items-center gap-3">
+                    <!-- PDF Download -->
+                    <button @onclick="DownloadPdf" disabled="@_isDownloading"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200 disabled:opacity-50">
+                        @if (_isDownloading)
+                        {
+                            <div class="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                        }
+                        else
+                        {
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        }
+                        PDF
+                    </button>
+
+                    @if (_invoice.Status == "Draft")
+                    {
+                        <button @onclick="SendInvoiceAsync" disabled="@_isSending"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200 disabled:opacity-50">
+                            @if (_isSending)
+                            {
+                                <div class="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                            }
+                            else
+                            {
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                            }
+                            Send
+                        </button>
+                        <PrimaryButton Href="@($"invoices/{Id}/edit")" Text="Edit" ShowIcon="false" />
+                    }
+                    @if (_invoice.Status != "Paid" && _invoice.Status != "Void" && _invoice.Status != "Draft")
+                    {
+                        <PrimaryButton Text="Mark as Paid" OnClick="MarkAsPaid" IsLoading="_isMarkingPaid" ShowIcon="false" />
+                    }
+                </div>
+            }
+        </Actions>
+    </PageHeader>
+
+    @if (_isLoading)
+    {
+        <LoadingSpinner Padding="py-20" />
+    }
+    else if (_invoice == null)
+    {
+        <EmptyState Title="Invoice not found"
+                    Message="The invoice you're looking for doesn't exist or has been deleted."
+                    IconType="EmptyState.EmptyStateIcon.Document"
+                    ActionUrl="invoices"
+                    ActionText="Back to Invoices" />
+    }
+    else
+    {
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Main Content - Invoice View -->
+            <div class="lg:col-span-2">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+                    <InvoiceViewContent
+                        InvoiceNumber="@_invoice.InvoiceNumber"
+                        Status="@_invoice.Status"
+                        Currency="@_invoice.Currency"
+                        IssueDate="@_invoice.IssueDate"
+                        DueDate="@_invoice.DueDate"
+                        PaidDate="@_invoice.PaidDate"
+                        BusinessName="@(_businessProfile?.TradingName ?? _businessProfile?.CompanyName)"
+                        BusinessAddress="@GetFormattedAddress()"
+                        BusinessEmail="@_businessProfile?.Email"
+                        BusinessPhone="@_businessProfile?.Phone"
+                        BusinessLogo="@_businessLogo"
+                        TaxNumber="@_businessProfile?.TaxNumber"
+                        RegistrationNumber="@_businessProfile?.RegistrationNumber"
+                        ClientName="@_invoice.ClientName"
+                        ClientCompanyName="@_invoice.ClientCompanyName"
+                        ClientAddress="@_invoice.ClientAddress"
+                        ClientEmail="@_invoice.ClientEmail"
+                        Subtotal="@_invoice.Subtotal"
+                        TaxRate="@_invoice.TaxRate"
+                        TaxAmount="@_invoice.TaxAmount"
+                        Total="@_invoice.Total"
+                        Notes="@_invoice.Notes"
+                        LineItems="@_invoice.LineItems"
+                        ExpenseLineItems="@_invoice.ExpenseLineItems"
+                        PrimaryColor="@PrimaryColor"
+                        AccentColor="@AccentColor"
+                        ShowLogo="@ShowLogo"
+                        ShowItemDescriptions="@ShowItemDescriptions"
+                        HeaderLayout="@HeaderLayout"
+                        ItemsLayout="@ItemsLayout"
+                        FooterLayout="@FooterLayout"
+                        PayPalMeUsername="@_businessProfile?.PayPalMeUsername"
+                        WiseEmail="@_businessProfile?.WiseEmail"
+                        RevolutUsername="@_businessProfile?.RevolutUsername"
+                        CurrencyPaymentSettings="@_currencyPaymentSettings" />
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <!-- Details Card -->
+                <Card Title="Details">
+                    <dl class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <dt class="text-sm text-gray-500 dark:text-slate-400">Status</dt>
+                            <dd>
+                                <StatusBadge Status="@_invoice.Status" Type="StatusBadge.StatusType.Invoice" />
+                            </dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-slate-400">Issue Date</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">@_invoice.IssueDate.ToString("MMM dd, yyyy")</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-slate-400">Due Date</dt>
+                            <dd class="text-sm font-medium @(IsOverdue ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-slate-100")">@_invoice.DueDate.ToString("MMM dd, yyyy")</dd>
+                        </div>
+                        @if (_invoice.PaidDate.HasValue)
+                        {
+                            <div class="flex justify-between">
+                                <dt class="text-sm text-gray-500 dark:text-slate-400">Paid On</dt>
+                                <dd class="text-sm font-medium text-emerald-600 dark:text-emerald-400">@_invoice.PaidDate.Value.ToString("MMM dd, yyyy")</dd>
+                            </div>
+                        }
+                        <div class="flex justify-between pt-2 border-t border-gray-100 dark:border-slate-700">
+                            <dt class="text-sm text-gray-500 dark:text-slate-400">Total</dt>
+                            <dd class="text-sm font-bold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(_invoice.Currency)@_invoice.Total.ToString("N2")</dd>
+                        </div>
+                    </dl>
+                </Card>
+
+                <!-- Client Card -->
+                <Card Title="Client">
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-sm font-medium text-gray-900 dark:text-slate-100">@_invoice.ClientName</p>
+                            @if (!string.IsNullOrEmpty(_invoice.ClientCompanyName))
+                            {
+                                <p class="text-sm text-gray-600 dark:text-slate-400">@_invoice.ClientCompanyName</p>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(_invoice.ClientEmail))
+                        {
+                            <p class="text-sm text-gray-600 dark:text-slate-400">@_invoice.ClientEmail</p>
+                        }
+                        <div class="pt-2">
+                            <a href="@($"clients/{_invoice.ClientId}")" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">View Client</a>
+                        </div>
+                    </div>
+                </Card>
+
+                <!-- Actions Card -->
+                <Card Title="Actions">
+                    <div class="space-y-3">
+                        @if (_invoice.PublicAccessToken.HasValue)
+                        {
+                            <a href="@($"/invoice/view/{_invoice.PublicAccessToken.Value}")" target="_blank" class="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                                View Public Link
+                            </a>
+                            <button @onclick="CopyPublicLinkAsync" class="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                Copy Link
+                            </button>
+                        }
+                        @if (_invoice.Status == "Draft")
+                        {
+                            <a href="@($"invoices/{Id}/edit")" class="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Edit Invoice
+                            </a>
+                        }
+                        <button @onclick="DeleteInvoiceAsync" class="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 hover:underline">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete Invoice
+                        </button>
+                    </div>
+                </Card>
+            </div>
+        </div>
+    }
+</div>
+
+<ErrorAlert Message="@_errorMessage" />
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private InvoiceDetailDto? _invoice;
+    private BusinessProfileDto? _businessProfile;
+    private byte[]? _businessLogo;
+    private CurrencyPaymentSettingsDto? _currencyPaymentSettings;
+    private bool _isLoading = true;
+    private bool _isDownloading;
+    private bool _isMarkingPaid;
+    private bool _isDeleting;
+    private bool _isSending;
+    private string? _errorMessage;
+    private List<PageHeader.BreadcrumbItem> _breadcrumbs = [];
+
+    private bool IsOverdue => _invoice != null && _invoice.Status != "Paid" && _invoice.Status != "Void" && _invoice.DueDate < DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new PageHeader.BreadcrumbItem("Invoices", "/invoices"),
+            new PageHeader.BreadcrumbItem("Details")
+        ];
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _isLoading = true;
+        try
+        {
+            _invoice = await GetInvoiceCall.Call(new GetInvoice { Id = Id });
+            _businessProfile = await GetBusinessProfileCall.Call(new GetBusinessProfile());
+
+            if (_businessProfile?.HasLogo == true)
+            {
+                _businessLogo = await GetBusinessLogoCall.Call(new GetBusinessLogo());
+            }
+
+            if (_invoice != null)
+            {
+                _currencyPaymentSettings = await GetCurrencyPaymentSettingsCall.Call(
+                    new GetCurrencyPaymentSettings { CurrencyCode = _invoice.Currency });
+                _breadcrumbs =
+                [
+                    new PageHeader.BreadcrumbItem("Invoices", "/invoices"),
+                    new PageHeader.BreadcrumbItem(_invoice.InvoiceNumber)
+                ];
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load invoice: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task DownloadPdf()
+    {
+        _isDownloading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var pdfBytes = await GetInvoicePdfCall.Call(new GetInvoicePdf { Id = Id });
+            var fileName = $"Invoice-{_invoice?.InvoiceNumber ?? Id.ToString()}.pdf";
+            await JS.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(pdfBytes), "application/pdf");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to download PDF: {ex.Message}";
+        }
+        finally
+        {
+            _isDownloading = false;
+        }
+    }
+
+    private async Task MarkAsPaid()
+    {
+        _isMarkingPaid = true;
+        _errorMessage = null;
+
+        try
+        {
+            await MarkInvoicePaidCall.Call(new MarkInvoicePaid { Id = Id, PaidDate = DateOnly.FromDateTime(DateTime.Today) });
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to mark invoice as paid: {ex.Message}";
+        }
+        finally
+        {
+            _isMarkingPaid = false;
+        }
+    }
+
+    private async Task DeleteInvoiceAsync()
+    {
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Invoice",
+            new Dictionary<string, object>
+            {
+                { "ItemName", _invoice?.InvoiceNumber ?? "this invoice" },
+                { "WarningMessage", "All line items and associated data will be permanently removed." }
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (!confirmed) return;
+
+        _isDeleting = true;
+        _errorMessage = null;
+
+        try
+        {
+            await DeleteInvoiceCall.Call(new DeleteInvoice { Id = Id });
+            NavigationManager.NavigateTo("invoices");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to delete invoice: {ex.Message}";
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+
+    private async Task SendInvoiceAsync()
+    {
+        if (_invoice == null) return;
+
+        var modalParams = new Dictionary<string, object>
+        {
+            { "InvoiceId", _invoice.Id },
+            { "InvoiceNumber", _invoice.InvoiceNumber },
+            { "ClientName", _invoice.ClientName },
+            { "ClientEmail", _invoice.ClientEmail ?? "" },
+            { "Currency", _invoice.Currency },
+            { "Amount", _invoice.Total },
+            { "DueDate", _invoice.DueDate }
+        };
+
+        if (_invoice.PublicAccessToken.HasValue)
+        {
+            modalParams.Add("PublicAccessToken", _invoice.PublicAccessToken.Value);
+        }
+
+        var result = await ModalService.ShowAsync<SendInvoiceResult?>(
+            typeof(SendInvoiceModal),
+            "Send Invoice",
+            modalParams,
+            new ModalOptions { Size = ModalSize.Medium });
+
+        if (result == null) return;
+
+        _isSending = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            await SendInvoiceCall.Call(new SendInvoice
+            {
+                Id = Id,
+                Email = result.Email,
+                Subject = result.Subject,
+                Body = result.Body
+            });
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to send invoice: {ex.Message}";
+        }
+        finally
+        {
+            _isSending = false;
+        }
+    }
+
+    private async Task CopyPublicLinkAsync()
+    {
+        if (_invoice?.PublicAccessToken.HasValue == true)
+        {
+            var link = NavigationManager.ToAbsoluteUri($"/invoice/view/{_invoice.PublicAccessToken.Value}").ToString();
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", link);
+        }
+    }
+
+    private string GetFormattedAddress()
+    {
+        if (_businessProfile == null) return "";
+
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(_businessProfile.Street))
+            parts.Add(_businessProfile.Street);
+
+        var cityLine = string.Join(", ",
+            new[] { _businessProfile.City, _businessProfile.State, _businessProfile.PostalCode }
+                .Where(s => !string.IsNullOrEmpty(s)));
+        if (!string.IsNullOrEmpty(cityLine))
+            parts.Add(cityLine);
+
+        if (!string.IsNullOrEmpty(_businessProfile.Country))
+            parts.Add(_businessProfile.Country);
+
+        return string.Join("\n", parts);
+    }
+
+    // Template color helpers
+    private string PrimaryColor => _invoice?.Template?.PrimaryColor ?? "#4f46e5";
+    private string AccentColor => _invoice?.Template?.AccentColor ?? "#059669";
+
+    // Template layout helpers
+    private string HeaderLayout => _invoice?.Template?.HeaderLayout?.ToLowerInvariant() ?? "standard";
+    private string ItemsLayout => _invoice?.Template?.ItemsLayout?.ToLowerInvariant() ?? "standard";
+    private string FooterLayout => _invoice?.Template?.FooterLayout?.ToLowerInvariant() ?? "standard";
+    private bool ShowLogo => _invoice?.Template?.ShowLogo ?? true;
+    private bool ShowItemDescriptions => _invoice?.Template?.ShowItemDescriptions ?? true;
+}

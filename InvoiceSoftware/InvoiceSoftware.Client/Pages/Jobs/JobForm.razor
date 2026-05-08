@@ -1,0 +1,787 @@
+@page "/jobs/new"
+@page "/jobs/{Id:guid}/edit"
+
+@inject ICall<GetClients, PaginatedResponse<ClientDto>> GetClientsCall
+@inject ICall<GetProjects, PaginatedResponse<ProjectDto>> GetProjectsCall
+@inject ICall<GetProjectSections, List<ProjectSectionDto>> GetProjectSectionsCall
+@inject ICall<GetJob, JobDetailDto> GetJobCall
+@inject ICall<CreateJob, Guid> CreateJobCall
+@inject ICall<UpdateJob> UpdateJobCall
+@inject ICall<CreateJobTask, JobTaskDto> CreateJobTaskCall
+@inject ICall<UpdateJobTask, JobTaskDto> UpdateJobTaskCall
+@inject ICall<DeleteJobTask> DeleteJobTaskCall
+@inject ICall<ToggleJobTaskComplete, JobTaskDto> ToggleJobTaskCall
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(Id.HasValue ? "Edit Job" : "New Job") - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header with Breadcrumbs -->
+    <PageHeader Title="@(Id.HasValue ? "Edit Job" : "New Job")"
+                Description="@(Id.HasValue ? "Update job details" : "Create a new job for a project")"
+                ShowBackButton="true"
+                BackUrl="jobs"
+                Breadcrumbs="@_breadcrumbs" />
+
+    @if (_isLoading)
+    {
+        <div class="flex justify-center py-20">
+            <div class="w-8 h-8 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit" class="space-y-6">
+            <DataAnnotationsValidator />
+
+            <!-- Job Details Section -->
+            <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                    <h2 class="text-sm font-semibold text-gray-900">Job Details</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Basic information about this job.</p>
+                </div>
+                <div class="p-6 space-y-5">
+                    <div>
+                        <label for="clientId" class="block text-sm font-medium text-gray-700 mb-2">Client <span class="text-red-500">*</span></label>
+                        <select id="clientId" value="@_selectedClientId" @onchange="OnClientChanged"
+                            class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 cursor-pointer">
+                            <option value="@Guid.Empty">Select a client...</option>
+                            @if (_clients != null)
+                            {
+                                @foreach (var client in _clients)
+                                {
+                                    <option value="@client.Id">@client.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="projectId" class="block text-sm font-medium text-gray-700 mb-2">Project <span class="text-red-500">*</span></label>
+                        <InputSelect id="projectId" Value="_model.ProjectId" ValueChanged="@((Guid value) => OnProjectChanged(value))" ValueExpression="@(() => _model.ProjectId)"
+                            disabled="@(_selectedClientId == Guid.Empty)"
+                            class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 cursor-pointer disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed">
+                            <option value="@Guid.Empty">@(_selectedClientId == Guid.Empty ? "Select a client first..." : "Select a project...")</option>
+                            @foreach (var project in FilteredProjects)
+                            {
+                                <option value="@project.Id">@project.Name</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => _model.ProjectId)" class="mt-1.5 text-xs text-red-600" />
+                    </div>
+
+                    @if (_sections?.Count > 0)
+                    {
+                        <div>
+                            <label for="sectionId" class="block text-sm font-medium text-gray-700 mb-2">Section</label>
+                            <InputSelect id="sectionId" @bind-Value="_model.SectionId"
+                                class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 cursor-pointer">
+                                <option value="">No section</option>
+                                @foreach (var sec in _sections)
+                                {
+                                    <option value="@sec.Id">@sec.Name</option>
+                                }
+                            </InputSelect>
+                            <p class="mt-1.5 text-xs text-gray-500">Optionally group this job under a project section.</p>
+                        </div>
+                    }
+
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700 mb-2">Job Name <span class="text-red-500">*</span></label>
+                        <InputText id="name" @bind-Value="_model.Name"
+                            class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300"
+                            placeholder="Homepage Design" />
+                        <ValidationMessage For="@(() => _model.Name)" class="mt-1.5 text-xs text-red-600" />
+                    </div>
+
+                    <div>
+                        <label for="description" class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <InputTextArea id="description" @bind-Value="_model.Description" rows="3"
+                            class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 resize-none"
+                            placeholder="Brief description of the job..." />
+                    </div>
+
+                    <div>
+                        <label for="notes" class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                        <InputTextArea id="notes" @bind-Value="_model.Notes" rows="4"
+                            class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 resize-none"
+                            placeholder="Internal notes, comments, or additional information..." />
+                        <p class="mt-1.5 text-xs text-gray-500">Add any internal notes or comments about this job.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                            <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                            <InputSelect id="status" @bind-Value="_model.Status"
+                                class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 cursor-pointer">
+                                <option value="Active">Active</option>
+                                <option value="OnHold">On Hold</option>
+                                <option value="Completed">Completed</option>
+                            </InputSelect>
+                        </div>
+
+                        <div>
+                            <label for="priority" class="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+                            <InputSelect id="priority" @bind-Value="_model.Priority"
+                                class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 cursor-pointer">
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                                <option value="Urgent">Urgent</option>
+                            </InputSelect>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                            <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                            <InputDate id="startDate" @bind-Value="_model.StartDate"
+                                class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300" />
+                        </div>
+
+                        <div>
+                            <label for="dueDate" class="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
+                            <InputDate id="dueDate" @bind-Value="_model.DueDate"
+                                class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estimates & Billing Section -->
+            <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                    <h2 class="text-sm font-semibold text-gray-900">Estimates & Billing</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Time estimates and rate override.</p>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                            <label for="estimatedHours" class="block text-sm font-medium text-gray-700 mb-2">Estimated Hours</label>
+                            <div class="relative">
+                                <InputNumber id="estimatedHours" @bind-Value="_model.EstimatedHours"
+                                    class="w-full pr-16 px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300" />
+                                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                    <span class="text-gray-400 text-sm">hours</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="hourlyRate" class="block text-sm font-medium text-gray-700 mb-2">Override Hourly Rate</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <span class="text-gray-500 text-sm">@CurrencyExtensions.GetSymbol(ClientCurrency)</span>
+                                </div>
+                                <InputNumber id="hourlyRate" @bind-Value="_model.HourlyRateOverride"
+                                    class="w-full pl-8 pr-16 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300" />
+                                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                    <span class="text-gray-400 text-sm">/ hour</span>
+                                </div>
+                            </div>
+                            <p class="mt-1.5 text-xs text-gray-500">Leave blank to use project or client rate.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tasks Section -->
+            <div class="card overflow-hidden">
+                <div class="card-header flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Task Breakdown</h2>
+                        <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Break down this job into smaller tasks to track progress.</p>
+                    </div>
+                    <button type="button" @onclick="ShowAddTaskForm" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-lg transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Add Task
+                    </button>
+                </div>
+
+                <!-- Add Task Form -->
+                @if (_showAddTaskForm)
+                {
+                    <div class="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-indigo-50/30 dark:bg-indigo-900/20">
+                        <div class="space-y-3">
+                            <div>
+                                <input type="text" @bind="_newTaskTitle" @bind:event="oninput" placeholder="Task title..."
+                                       class="w-full px-4 py-2.5 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10" />
+                            </div>
+                            <div>
+                                <textarea @bind="_newTaskDescription" placeholder="Description (optional)..." rows="2"
+                                          class="w-full px-4 py-2.5 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 resize-none"></textarea>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" @onclick="AddTask" disabled="@(string.IsNullOrWhiteSpace(_newTaskTitle) || _isSavingTask)"
+                                        class="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                                    @if (_isSavingTask)
+                                    {
+                                        <svg class="animate-spin -ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    }
+                                    Add Task
+                                </button>
+                                <button type="button" @onclick="CancelAddTask"
+                                        class="px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Task List -->
+                @if (!_tasks.Any() && !_showAddTaskForm)
+                {
+                    <div class="text-center py-10 px-6">
+                        <div class="mx-auto w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
+                             style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);">
+                            <svg class="h-6 w-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <p class="text-sm text-gray-500 dark:text-slate-400">No tasks yet. Add tasks to track progress.</p>
+                    </div>
+                }
+                else if (_tasks.Any())
+                {
+                    <div class="divide-y divide-gray-100 dark:divide-slate-700">
+                        @foreach (var task in _tasks.OrderBy(t => t.IsComplete).ThenBy(t => t.Order))
+                        {
+                            <div class="flex items-start gap-4 px-6 py-4 hover:bg-gray-50/50 dark:hover:bg-slate-800/50 transition-colors group @(task.IsComplete ? "bg-gray-50/30 dark:bg-slate-800/30" : "")">
+                                <!-- Checkbox -->
+                                <button type="button" @onclick="() => ToggleTaskComplete(task)"
+                                        class="mt-0.5 shrink-0 w-5 h-5 rounded-md border-2 transition-all duration-200 flex items-center justify-center @(task.IsComplete ? "bg-emerald-500 border-emerald-500" : "border-gray-300 dark:border-slate-600 hover:border-indigo-400")">
+                                    @if (task.IsComplete)
+                                    {
+                                        <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    }
+                                </button>
+
+                                <!-- Task Content -->
+                                @if (_editingTaskId == task.Id)
+                                {
+                                    <div class="flex-1 space-y-2">
+                                        <input type="text" @bind="_editTaskTitle" @bind:event="oninput"
+                                               class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10" />
+                                        <textarea @bind="_editTaskDescription" rows="2"
+                                                  class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10 resize-none"></textarea>
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" @onclick="SaveEditTask" disabled="@(string.IsNullOrWhiteSpace(_editTaskTitle) || _isSavingTask)"
+                                                    class="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 transition-colors">
+                                                Save
+                                            </button>
+                                            <button type="button" @onclick="CancelEditTask"
+                                                    class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-sm font-medium @(task.IsComplete ? "text-gray-400 dark:text-slate-500 line-through" : "text-gray-900 dark:text-slate-100")">@task.Title</div>
+                                        @if (!string.IsNullOrEmpty(task.Description))
+                                        {
+                                            <p class="text-sm @(task.IsComplete ? "text-gray-400 dark:text-slate-500" : "text-gray-500 dark:text-slate-400") mt-0.5">@task.Description</p>
+                                        }
+                                    </div>
+                                }
+
+                                <!-- Actions -->
+                                @if (_editingTaskId != task.Id)
+                                {
+                                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button type="button" @onclick="() => StartEditTask(task)"
+                                                class="p-1.5 text-gray-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-lg transition-colors">
+                                            <EditIcon />
+                                        </button>
+                                        <button type="button" @onclick="() => DeleteTask(task)"
+                                                class="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg transition-colors">
+                                            <DeleteIcon />
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Error Message -->
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="rounded-2xl bg-red-50 border border-red-100 p-4">
+                    <div class="flex gap-3">
+                        <svg class="h-5 w-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p class="text-sm text-red-700">@_errorMessage</p>
+                    </div>
+                </div>
+            }
+
+            <!-- Actions -->
+            <div class="flex items-center justify-end gap-3 pt-4">
+                <a href="jobs" class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200">
+                    Cancel
+                </a>
+                <button type="submit" disabled="@_isSaving"
+                    class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+                    style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">
+                    @if (_isSaving)
+                    {
+                        <svg class="animate-spin -ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    }
+                    @(Id.HasValue ? "Save Changes" : "Create Job")
+                </button>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private JobFormModel _model = new();
+    private List<ClientDto>? _clients;
+    private List<ProjectDto>? _projects;
+    private List<ProjectSectionDto>? _sections;
+    private Guid _selectedClientId = Guid.Empty;
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private string? _errorMessage;
+    private List<PageHeader.BreadcrumbItem> _breadcrumbs = [];
+
+    private IEnumerable<ProjectDto> FilteredProjects =>
+        _projects?.Where(p => p.ClientId == _selectedClientId) ?? [];
+
+    // Tasks state
+    private List<TaskItem> _tasks = [];
+    private bool _showAddTaskForm;
+    private string _newTaskTitle = "";
+    private string? _newTaskDescription;
+    private bool _isSavingTask;
+    private Guid? _editingTaskId;
+    private string _editTaskTitle = "";
+    private string? _editTaskDescription;
+    private int _nextTempOrder = 0;
+
+    private string ClientCurrency =>
+        _projects?.FirstOrDefault(p => p.Id == _model.ProjectId)?.Currency ?? "USD";
+
+    private void OnClientChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var clientId))
+        {
+            _selectedClientId = clientId;
+            _model.ProjectId = Guid.Empty; // Reset project when client changes
+            _model.SectionId = null; // Reset section
+            _sections = null;
+        }
+    }
+
+    private async Task OnProjectChanged(Guid projectId)
+    {
+        _model.ProjectId = projectId;
+        _model.SectionId = null; // Reset section when project changes
+        await LoadSectionsForProject(projectId);
+    }
+
+    private async Task LoadSectionsForProject(Guid projectId)
+    {
+        if (projectId == Guid.Empty)
+        {
+            _sections = null;
+            return;
+        }
+
+        try
+        {
+            _sections = await GetProjectSectionsCall.Call(new GetProjectSections { ProjectId = projectId });
+        }
+        catch
+        {
+            _sections = null;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new PageHeader.BreadcrumbItem("Jobs", "/jobs"),
+            new PageHeader.BreadcrumbItem(Id.HasValue ? "Edit Job" : "New Job")
+        ];
+
+        try
+        {
+            // Load sequentially to avoid concurrent DbContext access
+            var clientsResponse = await GetClientsCall.Call(new GetClients { PageSize = 1000 });
+            var projectsResponse = await GetProjectsCall.Call(new GetProjects { PageSize = 1000 });
+
+            _clients = clientsResponse?.Items ?? [];
+            _projects = projectsResponse?.Items ?? [];
+
+            if (Id.HasValue)
+            {
+                var job = await GetJobCall.Call(new GetJob { Id = Id.Value });
+                if (job != null)
+                {
+                    _model = new JobFormModel
+                    {
+                        ProjectId = job.ProjectId,
+                        SectionId = job.SectionId,
+                        Name = job.Name,
+                        Description = job.Description,
+                        Notes = job.Notes,
+                        Status = job.Status,
+                        Priority = job.Priority,
+                        StartDate = job.StartDate,
+                        DueDate = job.DueDate,
+                        EstimatedHours = job.EstimatedHours,
+                        HourlyRateOverride = job.HourlyRateOverride
+                    };
+                    // Set the selected client based on the project
+                    var project = _projects?.FirstOrDefault(p => p.Id == job.ProjectId);
+                    if (project != null)
+                    {
+                        _selectedClientId = project.ClientId;
+                    }
+                    // Load sections for the job's project
+                    await LoadSectionsForProject(job.ProjectId);
+                    // Load existing tasks
+                    _tasks = job.Tasks.Select(t => new TaskItem
+                    {
+                        Id = t.Id,
+                        Title = t.Title,
+                        Description = t.Description,
+                        IsComplete = t.IsComplete,
+                        Order = t.Order,
+                        IsNew = false
+                    }).ToList();
+                    _nextTempOrder = _tasks.Count;
+                }
+            }
+            else
+            {
+                _model.Status = "Active";
+                _model.Priority = "Medium";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load data: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (Id.HasValue)
+            {
+                await UpdateJobCall.Call(new UpdateJob
+                {
+                    Id = Id.Value,
+                    SectionId = _model.SectionId,
+                    Name = _model.Name,
+                    Description = _model.Description,
+                    Notes = _model.Notes,
+                    Status = _model.Status,
+                    Priority = _model.Priority,
+                    StartDate = _model.StartDate,
+                    DueDate = _model.DueDate,
+                    EstimatedHours = _model.EstimatedHours,
+                    HourlyRateOverride = _model.HourlyRateOverride
+                });
+            }
+            else
+            {
+                var newJobId = await CreateJobCall.Call(new CreateJob
+                {
+                    ProjectId = _model.ProjectId,
+                    SectionId = _model.SectionId,
+                    Name = _model.Name,
+                    Description = _model.Description,
+                    Notes = _model.Notes,
+                    Priority = _model.Priority,
+                    StartDate = _model.StartDate,
+                    DueDate = _model.DueDate,
+                    EstimatedHours = _model.EstimatedHours,
+                    HourlyRateOverride = _model.HourlyRateOverride
+                });
+
+                // Create tasks for the new job
+                foreach (var task in _tasks)
+                {
+                    await CreateJobTaskCall.Call(new CreateJobTask
+                    {
+                        JobId = newJobId,
+                        Title = task.Title,
+                        Description = task.Description
+                    });
+                }
+            }
+            NavigationManager.NavigateTo("jobs");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    // Task management methods
+    private void ShowAddTaskForm()
+    {
+        _showAddTaskForm = true;
+        _newTaskTitle = "";
+        _newTaskDescription = null;
+    }
+
+    private void CancelAddTask()
+    {
+        _showAddTaskForm = false;
+        _newTaskTitle = "";
+        _newTaskDescription = null;
+    }
+
+    private async Task AddTask()
+    {
+        if (string.IsNullOrWhiteSpace(_newTaskTitle)) return;
+
+        _isSavingTask = true;
+        try
+        {
+            if (Id.HasValue)
+            {
+                // For existing jobs, create task via API
+                var result = await CreateJobTaskCall.Call(new CreateJobTask
+                {
+                    JobId = Id.Value,
+                    Title = _newTaskTitle.Trim(),
+                    Description = _newTaskDescription?.Trim()
+                });
+
+                if (result != null)
+                {
+                    _tasks.Add(new TaskItem
+                    {
+                        Id = result.Id,
+                        Title = result.Title,
+                        Description = result.Description,
+                        IsComplete = result.IsComplete,
+                        Order = result.Order,
+                        IsNew = false
+                    });
+                }
+            }
+            else
+            {
+                // For new jobs, track locally
+                _tasks.Add(new TaskItem
+                {
+                    Id = Guid.NewGuid(),
+                    Title = _newTaskTitle.Trim(),
+                    Description = _newTaskDescription?.Trim(),
+                    IsComplete = false,
+                    Order = _nextTempOrder++,
+                    IsNew = true
+                });
+            }
+
+            _showAddTaskForm = false;
+            _newTaskTitle = "";
+            _newTaskDescription = null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error adding task: {ex.Message}");
+        }
+        finally
+        {
+            _isSavingTask = false;
+        }
+    }
+
+    private void StartEditTask(TaskItem task)
+    {
+        _editingTaskId = task.Id;
+        _editTaskTitle = task.Title;
+        _editTaskDescription = task.Description;
+    }
+
+    private void CancelEditTask()
+    {
+        _editingTaskId = null;
+        _editTaskTitle = "";
+        _editTaskDescription = null;
+    }
+
+    private async Task SaveEditTask()
+    {
+        if (_editingTaskId == null || string.IsNullOrWhiteSpace(_editTaskTitle)) return;
+
+        _isSavingTask = true;
+        try
+        {
+            var task = _tasks.FirstOrDefault(t => t.Id == _editingTaskId.Value);
+            if (task == null) return;
+
+            if (Id.HasValue && !task.IsNew)
+            {
+                // For existing jobs and existing tasks, update via API
+                var result = await UpdateJobTaskCall.Call(new UpdateJobTask
+                {
+                    JobId = Id.Value,
+                    TaskId = _editingTaskId.Value,
+                    Title = _editTaskTitle.Trim(),
+                    Description = _editTaskDescription?.Trim()
+                });
+
+                if (result != null)
+                {
+                    task.Title = result.Title;
+                    task.Description = result.Description;
+                }
+            }
+            else
+            {
+                // For new jobs or new tasks, update locally
+                task.Title = _editTaskTitle.Trim();
+                task.Description = _editTaskDescription?.Trim();
+            }
+
+            _editingTaskId = null;
+            _editTaskTitle = "";
+            _editTaskDescription = null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating task: {ex.Message}");
+        }
+        finally
+        {
+            _isSavingTask = false;
+        }
+    }
+
+    private async Task ToggleTaskComplete(TaskItem task)
+    {
+        try
+        {
+            if (Id.HasValue && !task.IsNew)
+            {
+                // For existing jobs, toggle via API
+                var result = await ToggleJobTaskCall.Call(new ToggleJobTaskComplete
+                {
+                    JobId = Id.Value,
+                    TaskId = task.Id
+                });
+
+                if (result != null)
+                {
+                    task.IsComplete = result.IsComplete;
+                }
+            }
+            else
+            {
+                // For new jobs, toggle locally
+                task.IsComplete = !task.IsComplete;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error toggling task: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteTask(TaskItem task)
+    {
+        try
+        {
+            if (Id.HasValue && !task.IsNew)
+            {
+                // For existing jobs, delete via API
+                await DeleteJobTaskCall.Call(new DeleteJobTask
+                {
+                    JobId = Id.Value,
+                    TaskId = task.Id
+                });
+            }
+
+            _tasks.Remove(task);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting task: {ex.Message}");
+        }
+    }
+
+    // Task item class for local tracking
+    public class TaskItem
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = "";
+        public string? Description { get; set; }
+        public bool IsComplete { get; set; }
+        public int Order { get; set; }
+        public bool IsNew { get; set; } // True for tasks not yet saved to DB
+    }
+
+    public class JobFormModel
+    {
+        [Required(ErrorMessage = "Project is required")]
+        public Guid ProjectId { get; set; }
+
+        public Guid? SectionId { get; set; }
+
+        [Required(ErrorMessage = "Job name is required")]
+        [StringLength(200, ErrorMessage = "Name cannot exceed 200 characters")]
+        public string Name { get; set; } = "";
+
+        [StringLength(2000)]
+        public string? Description { get; set; }
+
+        [StringLength(4000)]
+        public string? Notes { get; set; }
+
+        [Required]
+        public string Status { get; set; } = "Active";
+
+        [Required]
+        public string Priority { get; set; } = "Medium";
+
+        public DateOnly? StartDate { get; set; }
+
+        public DateOnly? DueDate { get; set; }
+
+        [Range(0.01, 10000)]
+        public decimal? EstimatedHours { get; set; }
+
+        [Range(0.01, 10000, ErrorMessage = "Rate must be between $0.01 and $10,000")]
+        public decimal? HourlyRateOverride { get; set; }
+    }
+}

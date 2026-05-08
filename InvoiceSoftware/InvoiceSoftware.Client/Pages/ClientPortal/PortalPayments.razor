@@ -1,0 +1,162 @@
+@page "/portal/{Token:guid}/payments"
+@layout PortalLayout
+
+@inject ICall<GetClientPortalPaymentHistory, PaginatedResponse<PaymentHistoryDto>> GetPaymentsCall
+
+<PageTitle>Payment History - Client Portal</PageTitle>
+
+<div class="min-h-screen bg-gray-50 dark:bg-slate-900">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <a href="@($"portal/{Token}")" class="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 mb-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to Portal
+                </a>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-slate-100">Payment History</h1>
+                <p class="text-gray-500 dark:text-slate-400 mt-1">View your payment records</p>
+            </div>
+        </div>
+
+        <!-- Search -->
+        <div class="mb-6">
+            <div class="max-w-md">
+                <input type="text" @bind="_searchTerm" @bind:after="OnSearchChanged" placeholder="Search payments..."
+                       class="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400" />
+            </div>
+        </div>
+
+        @if (_isLoading)
+        {
+            <LoadingTable Rows="5" Columns="4" />
+        }
+        else if (_response == null || !_response.Items.Any())
+        {
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center">
+                <svg class="w-12 h-12 mx-auto text-gray-400 dark:text-slate-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">No payment history</h3>
+                <p class="text-gray-500 dark:text-slate-400">@(!string.IsNullOrEmpty(_searchTerm) ? "No payments match your search." : "You haven't made any payments yet.")</p>
+            </div>
+        }
+        else
+        {
+            <!-- Summary -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 mb-6 shadow-sm">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-slate-400">Total Paid</p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(_response.Items.FirstOrDefault()?.Currency ?? "USD")@_response.Items.Sum(p => p.Amount).ToString("N2")</p>
+                    </div>
+                    <div class="ml-auto text-right">
+                        <p class="text-sm text-gray-500 dark:text-slate-400">Payments</p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-slate-100">@_response.TotalCount</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payments List -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-100 dark:divide-slate-700">
+                    <thead class="bg-gray-50 dark:bg-slate-700/50">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Invoice</th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Payment Date</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Amount</th>
+                            <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                        @foreach (var payment in _response.Items)
+                        {
+                            <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="text-sm font-medium text-gray-900 dark:text-slate-100">@payment.InvoiceNumber</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="text-sm text-gray-600 dark:text-slate-400">@payment.PaidDate.ToString("MMM d, yyyy")</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right">
+                                    <span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">@CurrencyExtensions.GetSymbol(payment.Currency)@payment.Amount.ToString("N2")</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-center">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-600/20">
+                                        Completed
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (_response.TotalPages > 1)
+            {
+                <div class="mt-6">
+                    <Pagination CurrentPage="_response.Page"
+                                TotalPages="_response.TotalPages"
+                                OnPageChanged="OnPageChanged" />
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid Token { get; set; }
+
+    private PaginatedResponse<PaymentHistoryDto>? _response;
+    private bool _isLoading = true;
+    private string _searchTerm = "";
+    private int _currentPage = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPayments();
+    }
+
+    private async Task LoadPayments()
+    {
+        _isLoading = true;
+        try
+        {
+            _response = await GetPaymentsCall.Call(new GetClientPortalPaymentHistory
+            {
+                ClientToken = Token,
+                Page = _currentPage,
+                PageSize = 15,
+                Search = _searchTerm
+            });
+        }
+        catch
+        {
+            _response = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnSearchChanged()
+    {
+        _currentPage = 1;
+        await LoadPayments();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadPayments();
+    }
+}

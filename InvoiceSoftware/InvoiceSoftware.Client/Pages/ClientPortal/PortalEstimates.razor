@@ -1,0 +1,184 @@
+@page "/portal/{Token:guid}/estimates"
+@layout PortalLayout
+
+@inject ICall<GetClientPortalEstimates, PaginatedResponse<ClientPortalEstimateDto>> GetEstimatesCall
+
+<PageTitle>Estimates - Client Portal</PageTitle>
+
+<div class="min-h-screen bg-gray-50 dark:bg-slate-900">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <a href="@($"portal/{Token}")" class="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 mb-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to Portal
+                </a>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-slate-100">Your Estimates</h1>
+                <p class="text-gray-500 dark:text-slate-400 mt-1">Review and respond to estimates</p>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex flex-wrap items-center gap-4 mb-6">
+            <div class="flex-1 min-w-[200px]">
+                <input type="text" @bind="_searchTerm" @bind:after="OnFilterChanged" placeholder="Search estimates..."
+                       class="w-full px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-slate-400" />
+            </div>
+            <select @bind="_selectedStatus" @bind:after="OnFilterChanged" class="py-2.5 px-4 text-sm text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+                <option value="">All Status</option>
+                <option value="Sent">Pending</option>
+                <option value="Accepted">Accepted</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Expired">Expired</option>
+            </select>
+        </div>
+
+        @if (_isLoading)
+        {
+            <LoadingTable Rows="5" Columns="6" />
+        }
+        else if (_response == null || !_response.Items.Any())
+        {
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center">
+                <svg class="w-12 h-12 mx-auto text-gray-400 dark:text-slate-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">No estimates found</h3>
+                <p class="text-gray-500 dark:text-slate-400">@(HasActiveFilters ? "No estimates match your filters." : "You don't have any estimates yet.")</p>
+            </div>
+        }
+        else
+        {
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-100 dark:divide-slate-700">
+                    <thead class="bg-gray-50 dark:bg-slate-700/50">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Estimate</th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Expires</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Amount</th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                            <th class="relative px-6 py-4"><span class="sr-only">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                        @foreach (var estimate in _response.Items)
+                        {
+                            <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="text-sm font-medium text-gray-900 dark:text-slate-100">@estimate.EstimateNumber</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="text-sm text-gray-600 dark:text-slate-400">@estimate.EstimateDate.ToString("MMM d, yyyy")</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    @if (estimate.ExpiryDate.HasValue)
+                                    {
+                                        <span class="text-sm text-gray-600 dark:text-slate-400">@estimate.ExpiryDate.Value.ToString("MMM d, yyyy")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-sm text-gray-400 dark:text-slate-500">-</span>
+                                    }
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right">
+                                    <span class="text-sm font-semibold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(estimate.Currency)@estimate.Total.ToString("N2")</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    @{
+                                        var (bgClass, textClass) = GetStatusClasses(estimate.Status);
+                                    }
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium @bgClass @textClass">@estimate.Status</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right">
+                                    @if (estimate.PublicAccessToken.HasValue)
+                                    {
+                                        <a href="@($"/estimate/{estimate.PublicAccessToken.Value}")" target="_blank" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                                            View
+                                        </a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (_response.TotalPages > 1)
+            {
+                <div class="mt-6">
+                    <Pagination CurrentPage="_response.Page"
+                                TotalPages="_response.TotalPages"
+                                OnPageChanged="OnPageChanged" />
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid Token { get; set; }
+
+    private PaginatedResponse<ClientPortalEstimateDto>? _response;
+    private bool _isLoading = true;
+    private string _searchTerm = "";
+    private string _selectedStatus = "";
+    private int _currentPage = 1;
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_searchTerm) || !string.IsNullOrEmpty(_selectedStatus);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEstimates();
+    }
+
+    private async Task LoadEstimates()
+    {
+        _isLoading = true;
+        try
+        {
+            _response = await GetEstimatesCall.Call(new GetClientPortalEstimates
+            {
+                ClientToken = Token,
+                Page = _currentPage,
+                PageSize = 15,
+                Search = _searchTerm,
+                Status = string.IsNullOrEmpty(_selectedStatus) ? null : _selectedStatus
+            });
+        }
+        catch
+        {
+            _response = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        _currentPage = 1;
+        await LoadEstimates();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadEstimates();
+    }
+
+    private static (string bgClass, string textClass) GetStatusClasses(string status) => status switch
+    {
+        "Sent" => ("bg-blue-50 dark:bg-blue-900/30 ring-1 ring-inset ring-blue-600/20", "text-blue-700 dark:text-blue-400"),
+        "Accepted" => ("bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-inset ring-emerald-600/20", "text-emerald-700 dark:text-emerald-400"),
+        "Rejected" => ("bg-red-50 dark:bg-red-900/30 ring-1 ring-inset ring-red-600/20", "text-red-700 dark:text-red-400"),
+        "Expired" => ("bg-amber-50 dark:bg-amber-900/30 ring-1 ring-inset ring-amber-600/20", "text-amber-700 dark:text-amber-400"),
+        "Converted" => ("bg-purple-50 dark:bg-purple-900/30 ring-1 ring-inset ring-purple-600/20", "text-purple-700 dark:text-purple-400"),
+        _ => ("bg-gray-50 dark:bg-slate-700 ring-1 ring-inset ring-gray-500/20", "text-gray-600 dark:text-slate-400")
+    };
+}

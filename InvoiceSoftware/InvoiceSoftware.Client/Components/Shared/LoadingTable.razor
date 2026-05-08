@@ -1,0 +1,60 @@
+@* Loading skeleton for table layouts *@
+
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full">
+            <thead>
+                <tr class="bg-gray-50/80 dark:bg-slate-700/50">
+                    @for (int col = 0; col < Columns; col++)
+                    {
+                        <th scope="col" class="px-6 py-4 text-left">
+                            <div class="h-3 w-16 bg-gray-200 dark:bg-slate-600 rounded animate-pulse"></div>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                @for (int row = 0; row < Rows; row++)
+                {
+                    <tr class="animate-pulse">
+                        @for (int col = 0; col < Columns; col++)
+                        {
+                            <td class="px-6 py-4">
+                                <div class="h-4 bg-gray-100 dark:bg-slate-700 rounded" style="width: @GetRandomWidth(row, col)%;"></div>
+                                @if (col == 0 && ShowSubtext)
+                                {
+                                    <div class="h-3 bg-gray-100 dark:bg-slate-700 rounded mt-2 w-2/3"></div>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int Rows { get; set; } = 5;
+
+    [Parameter]
+    public int Columns { get; set; } = 5;
+
+    [Parameter]
+    public bool ShowSubtext { get; set; } = true;
+
+    private int GetRandomWidth(int row, int col)
+    {
+        // Create a deterministic "random" width based on row and column
+        var seed = (row * 7 + col * 13) % 5;
+        return seed switch
+        {
+            0 => 60,
+            1 => 80,
+            2 => 50,
+            3 => 70,
+            _ => 90
+        };
+    }
+}

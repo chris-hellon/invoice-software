@@ -1,0 +1,359 @@
+@page "/recurring-invoices/{Id:guid}"
+
+@inject ICall<GetRecurringInvoice, RecurringInvoiceDetailDto> GetRecurringInvoiceCall
+@inject ICall<DeleteRecurringInvoice> DeleteRecurringInvoiceCall
+@inject ICall<PauseRecurringInvoice> PauseRecurringInvoiceCall
+@inject ICall<ResumeRecurringInvoice> ResumeRecurringInvoiceCall
+@inject ICall<GenerateInvoiceNow, Guid?> GenerateInvoiceNowCall
+
+<PageTitle>Recurring Invoice Details - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <PageHeader Title="@(_invoice?.TemplateName ?? "Loading...")"
+                Description="@(_invoice != null ? $"Recurring invoice for {_invoice.ClientName}" : "")"
+                ShowBackButton="true"
+                BackUrl="recurring-invoices"
+                Breadcrumbs="@_breadcrumbs">
+        <Actions>
+            @if (_invoice != null)
+            {
+                <div class="flex items-center gap-3">
+                    @if (_invoice.IsActive)
+                    {
+                        <SecondaryButton Text="Generate Now" OnClick="GenerateNowAsync" IsLoading="_isGenerating" />
+                        <SecondaryButton Text="Pause" OnClick="PauseAsync" IsLoading="_isPausing" />
+                    }
+                    else
+                    {
+                        <SecondaryButton Text="Resume" OnClick="ResumeAsync" IsLoading="_isResuming" />
+                    }
+                    <PrimaryButton Href="@($"recurring-invoices/{Id}/edit")" Text="Edit" ShowIcon="false" />
+                </div>
+            }
+        </Actions>
+    </PageHeader>
+
+    @if (_isLoading)
+    {
+        <LoadingSpinner Padding="py-20" />
+    }
+    else if (_invoice == null)
+    {
+        <EmptyState Title="Recurring invoice not found"
+                    Message="The recurring invoice you're looking for doesn't exist or has been deleted."
+                    IconType="EmptyState.EmptyStateIcon.Document"
+                    ActionUrl="recurring-invoices"
+                    ActionText="Back to Recurring Invoices" />
+    }
+    else
+    {
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Main Content -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Status Card -->
+                <Card>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">Status</p>
+                            @if (_invoice.IsActive)
+                            {
+                                <span class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg mt-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-600/20">Active</span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg mt-1 bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-400 ring-1 ring-inset ring-gray-500/20">Paused</span>
+                            }
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm text-gray-500 dark:text-slate-400">Estimated Total</p>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(_invoice.Currency)@_invoice.Total.ToString("N2")</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <!-- Line Items -->
+                <Card Title="Line Items" Description="Products and services included in each generated invoice.">
+                    <div class="overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-100 dark:divide-slate-700">
+                            <thead>
+                                <tr>
+                                    <th class="py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Description</th>
+                                    <th class="py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Qty</th>
+                                    <th class="py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Rate</th>
+                                    <th class="py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                                @foreach (var item in _invoice.LineItems)
+                                {
+                                    <tr>
+                                        <td class="py-4">
+                                            <p class="text-sm font-medium text-gray-900 dark:text-slate-100">@item.Description</p>
+                                            @if (!string.IsNullOrEmpty(item.ProductName))
+                                            {
+                                                <p class="text-xs text-gray-500 dark:text-slate-400">@item.ProductName</p>
+                                            }
+                                        </td>
+                                        <td class="py-4 text-right text-sm text-gray-600 dark:text-slate-400">@item.Quantity</td>
+                                        <td class="py-4 text-right text-sm text-gray-600 dark:text-slate-400">@CurrencyExtensions.GetSymbol(_invoice.Currency)@item.UnitPrice.ToString("N2")</td>
+                                        <td class="py-4 text-right text-sm font-medium text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(_invoice.Currency)@item.LineTotal.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="border-t-2 border-gray-200 dark:border-slate-600">
+                                <tr>
+                                    <td colspan="3" class="py-3 text-right text-sm font-medium text-gray-600 dark:text-slate-400">Subtotal</td>
+                                    <td class="py-3 text-right text-sm font-semibold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(_invoice.Currency)@_invoice.Subtotal.ToString("N2")</td>
+                                </tr>
+                                @if (_invoice.TaxRate > 0)
+                                {
+                                    <tr>
+                                        <td colspan="3" class="py-2 text-right text-sm text-gray-600 dark:text-slate-400">Tax (@_invoice.TaxRate%)</td>
+                                        <td class="py-2 text-right text-sm text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(_invoice.Currency)@_invoice.TaxAmount.ToString("N2")</td>
+                                    </tr>
+                                }
+                                <tr>
+                                    <td colspan="3" class="py-3 text-right text-sm font-bold text-gray-900 dark:text-slate-100">Total</td>
+                                    <td class="py-3 text-right text-lg font-bold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(_invoice.Currency)@_invoice.Total.ToString("N2")</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </Card>
+
+                @if (!string.IsNullOrEmpty(_invoice.Notes) || !string.IsNullOrEmpty(_invoice.Terms) || !string.IsNullOrEmpty(_invoice.Footer))
+                {
+                    <Card Title="Notes & Terms">
+                        @if (!string.IsNullOrEmpty(_invoice.Notes))
+                        {
+                            <div class="mb-4">
+                                <h4 class="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Notes</h4>
+                                <p class="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-wrap">@_invoice.Notes</p>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(_invoice.Terms))
+                        {
+                            <div class="mb-4">
+                                <h4 class="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Terms & Conditions</h4>
+                                <p class="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-wrap">@_invoice.Terms</p>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(_invoice.Footer))
+                        {
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Footer</h4>
+                                <p class="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-wrap">@_invoice.Footer</p>
+                            </div>
+                        }
+                    </Card>
+                }
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <!-- Client Info -->
+                <Card Title="Client">
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-sm font-medium text-gray-900 dark:text-slate-100">@_invoice.ClientName</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <!-- Schedule -->
+                <Card Title="Schedule">
+                    <dl class="space-y-3">
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-slate-400">Frequency</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">
+                                Every @(_invoice.FrequencyInterval == 1 ? "" : $"{_invoice.FrequencyInterval} ")@_invoice.Frequency@(_invoice.FrequencyInterval > 1 ? "s" : "")
+                            </dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-slate-400">Start Date</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">@_invoice.StartDate.ToString("MMM dd, yyyy")</dd>
+                        </div>
+                        @if (_invoice.EndDate.HasValue)
+                        {
+                            <div class="flex justify-between">
+                                <dt class="text-sm text-gray-500 dark:text-slate-400">End Date</dt>
+                                <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">@_invoice.EndDate.Value.ToString("MMM dd, yyyy")</dd>
+                            </div>
+                        }
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-slate-400">Due Days</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">@_invoice.DueDays days</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-slate-400">Next Invoice</dt>
+                            <dd class="text-sm font-medium text-indigo-600 dark:text-indigo-400">@_invoice.NextInvoiceDate.ToString("MMM dd, yyyy")</dd>
+                        </div>
+                        @if (_invoice.LastGeneratedDate.HasValue)
+                        {
+                            <div class="flex justify-between">
+                                <dt class="text-sm text-gray-500 dark:text-slate-400">Last Generated</dt>
+                                <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">@_invoice.LastGeneratedDate.Value.ToString("MMM dd, yyyy")</dd>
+                            </div>
+                        }
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-slate-400">Invoices Generated</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">@_invoice.GeneratedCount</dd>
+                        </div>
+                    </dl>
+                </Card>
+
+                <!-- Actions -->
+                <Card Title="Actions">
+                    <div class="space-y-3">
+                        <button @onclick="DeleteInvoiceAsync" class="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 hover:underline">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete Recurring Invoice
+                        </button>
+                    </div>
+                </Card>
+            </div>
+        </div>
+    }
+</div>
+
+<ErrorAlert Message="@_errorMessage" />
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private RecurringInvoiceDetailDto? _invoice;
+    private bool _isLoading = true;
+    private bool _isPausing;
+    private bool _isResuming;
+    private bool _isGenerating;
+    private string? _errorMessage;
+    private List<PageHeader.BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new PageHeader.BreadcrumbItem("Recurring Invoices", "/recurring-invoices"),
+            new PageHeader.BreadcrumbItem("Details")
+        ];
+
+        await LoadInvoice();
+    }
+
+    private async Task LoadInvoice()
+    {
+        _isLoading = true;
+        try
+        {
+            _invoice = await GetRecurringInvoiceCall.Call(new GetRecurringInvoice { Id = Id });
+            if (_invoice != null)
+            {
+                _breadcrumbs =
+                [
+                    new PageHeader.BreadcrumbItem("Recurring Invoices", "/recurring-invoices"),
+                    new PageHeader.BreadcrumbItem(_invoice.TemplateName)
+                ];
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load recurring invoice: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task PauseAsync()
+    {
+        _isPausing = true;
+        _errorMessage = null;
+        try
+        {
+            await PauseRecurringInvoiceCall.Call(new PauseRecurringInvoice { Id = Id });
+            await LoadInvoice();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to pause recurring invoice: {ex.Message}";
+        }
+        finally
+        {
+            _isPausing = false;
+        }
+    }
+
+    private async Task ResumeAsync()
+    {
+        _isResuming = true;
+        _errorMessage = null;
+        try
+        {
+            await ResumeRecurringInvoiceCall.Call(new ResumeRecurringInvoice { Id = Id });
+            await LoadInvoice();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to resume recurring invoice: {ex.Message}";
+        }
+        finally
+        {
+            _isResuming = false;
+        }
+    }
+
+    private async Task GenerateNowAsync()
+    {
+        _isGenerating = true;
+        _errorMessage = null;
+        try
+        {
+            var invoiceId = await GenerateInvoiceNowCall.Call(new GenerateInvoiceNow { Id = Id });
+            if (invoiceId.HasValue)
+            {
+                NavigationManager.NavigateTo($"invoices/{invoiceId.Value}");
+            }
+            else
+            {
+                _errorMessage = "Failed to generate invoice - no invoice ID returned";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to generate invoice: {ex.Message}";
+        }
+        finally
+        {
+            _isGenerating = false;
+        }
+    }
+
+    private async Task DeleteInvoiceAsync()
+    {
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Recurring Invoice",
+            new Dictionary<string, object>
+            {
+                { "ItemName", _invoice?.TemplateName ?? "this recurring invoice" },
+                { "WarningMessage", "This will permanently delete this recurring invoice. No new invoices will be generated." }
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (!confirmed) return;
+
+        try
+        {
+            await DeleteRecurringInvoiceCall.Call(new DeleteRecurringInvoice { Id = Id });
+            NavigationManager.NavigateTo("recurring-invoices");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to delete recurring invoice: {ex.Message}";
+        }
+    }
+}

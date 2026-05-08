@@ -1,0 +1,504 @@
+@page "/projects/new"
+@page "/projects/{Id:guid}/edit"
+
+@inject ICall<GetClients, PaginatedResponse<ClientDto>> GetClientsCall
+@inject ICall<GetProject, ProjectDetailDto> GetProjectCall
+@inject ICall<CreateProject, Guid> CreateProjectCall
+@inject ICall<UpdateProject> UpdateProjectCall
+@inject ICall<CreateProjectSection, Guid> CreateSectionCall
+@inject ICall<UpdateProjectSection> UpdateSectionCall
+@inject ICall<DeleteProjectSection> DeleteSectionCall
+
+<PageTitle>@(Id.HasValue ? "Edit Project" : "New Project") - InvoicePro</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header with Breadcrumbs -->
+    <PageHeader Title="@(Id.HasValue ? "Edit Project" : "New Project")"
+                Description="@(Id.HasValue ? "Update project details" : "Create a new project for a client")"
+                ShowBackButton="true"
+                BackUrl="projects"
+                Breadcrumbs="@_breadcrumbs" />
+
+    @if (_isLoading)
+    {
+        <LoadingSpinner Padding="py-20" />
+    }
+    else
+    {
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit" class="space-y-6">
+            <DataAnnotationsValidator />
+
+            <!-- Project Details Section -->
+            <Card Title="Project Details" Description="Basic information about this project.">
+                    <div>
+                        <label for="clientId" class="block text-sm font-medium text-gray-700 mb-2">Client <span class="text-red-500">*</span></label>
+                        <InputSelect id="clientId" @bind-Value="_model.ClientId"
+                            class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 cursor-pointer">
+                            <option value="@Guid.Empty">Select a client...</option>
+                            @if (_clients != null)
+                            {
+                                @foreach (var client in _clients)
+                                {
+                                    <option value="@client.Id">@client.Name</option>
+                                }
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => _model.ClientId)" class="mt-1.5 text-xs text-red-600" />
+                    </div>
+
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700 mb-2">Project Name <span class="text-red-500">*</span></label>
+                        <InputText id="name" @bind-Value="_model.Name"
+                            class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300"
+                            placeholder="Website Redesign" />
+                        <ValidationMessage For="@(() => _model.Name)" class="mt-1.5 text-xs text-red-600" />
+                    </div>
+
+                    <div>
+                        <label for="description" class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <InputTextArea id="description" @bind-Value="_model.Description" rows="3"
+                            class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 resize-none"
+                            placeholder="Brief description of the project..." />
+                    </div>
+
+                    <div>
+                        <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                        <InputSelect id="status" @bind-Value="_model.Status"
+                            class="w-full px-4 py-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 cursor-pointer">
+                            <option value="Active">Active</option>
+                            <option value="OnHold">On Hold</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Archived">Archived</option>
+                        </InputSelect>
+                    </div>
+            </Card>
+
+            <!-- Timeline & Billing Section -->
+            <Card Title="Timeline & Billing" Description="Project dates and rate override.">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                            <label for="startDate" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Start Date</label>
+                            <InputDate id="startDate" @bind-Value="_model.StartDate"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1e1b3a] border border-gray-200 dark:border-[#2d2a4a] rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-[#3d3a5a]" />
+                        </div>
+
+                        <div>
+                            <label for="endDate" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">End Date</label>
+                            <InputDate id="endDate" @bind-Value="_model.EndDate"
+                                class="w-full px-4 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1e1b3a] border border-gray-200 dark:border-[#2d2a4a] rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-[#3d3a5a]" />
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-100 dark:border-[#2d2a4a]" />
+
+                    <div class="sm:w-1/2">
+                        <label for="hourlyRate" class="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Override Hourly Rate</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <span class="text-gray-500 dark:text-slate-400 text-sm">@CurrencyExtensions.GetSymbol(ClientCurrency)</span>
+                            </div>
+                            <InputNumber id="hourlyRate" @bind-Value="_model.HourlyRateOverride"
+                                class="w-full pl-8 pr-16 py-3 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#1e1b3a] border border-gray-200 dark:border-[#2d2a4a] rounded-xl transition-all duration-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 hover:border-gray-300 dark:hover:border-[#3d3a5a]" />
+                            <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                <span class="text-gray-400 dark:text-slate-500 text-sm">/ hour</span>
+                            </div>
+                        </div>
+                        <p class="mt-1.5 text-xs text-gray-500 dark:text-slate-400">Leave blank to use the client's default rate.</p>
+                    </div>
+            </Card>
+
+            <!-- Sections Section (only when editing) -->
+            @if (Id.HasValue)
+            {
+                <Card Title="Project Sections" Description="Organize jobs into sections within this project.">
+                    <!-- Existing Sections List -->
+                    @if (_sections.Count > 0)
+                    {
+                        <div class="space-y-3">
+                            @foreach (var sec in _sections)
+                            {
+                                <div class="flex items-start gap-3 p-4 bg-gray-50 dark:bg-[#1e1b3a] rounded-xl border border-gray-100 dark:border-[#2d2a4a]">
+                                    @if (_editingSectionId == sec.Id)
+                                    {
+                                        <!-- Edit Mode -->
+                                        <div class="flex-1 space-y-3">
+                                            <input type="text" @bind="_editSectionName" placeholder="Section name"
+                                                class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#252240] border border-gray-200 dark:border-[#3d3a5a] rounded-lg focus:outline-none focus:border-indigo-400" />
+                                            <input type="text" @bind="_editSectionDescription" placeholder="Description (optional)"
+                                                class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#252240] border border-gray-200 dark:border-[#3d3a5a] rounded-lg focus:outline-none focus:border-indigo-400" />
+                                            <div class="flex gap-2">
+                                                <button type="button" @onclick="SaveEditSection" disabled="@_isSavingSection"
+                                                    class="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                                                    @(_isSavingSection ? "Saving..." : "Save")
+                                                </button>
+                                                <button type="button" @onclick="CancelEditSection"
+                                                    class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-slate-300 bg-white dark:bg-[#252240] border border-gray-200 dark:border-[#3d3a5a] rounded-lg hover:bg-gray-50 dark:hover:bg-[#2d2a4a]">
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <!-- View Mode -->
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-medium text-gray-900 dark:text-slate-100">@sec.Name</span>
+                                                <span class="text-xs text-gray-500 dark:text-slate-400">(@sec.JobCount jobs)</span>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(sec.Description))
+                                            {
+                                                <p class="text-sm text-gray-500 dark:text-slate-400 mt-0.5">@sec.Description</p>
+                                            }
+                                        </div>
+                                        <div class="flex items-center gap-1">
+                                            <button type="button" @onclick="() => StartEditSection(sec)"
+                                                class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-white dark:hover:bg-[#252240] transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                            </button>
+                                            <button type="button" @onclick="() => DeleteSection(sec)" disabled="@(_deletingSectionId == sec.Id)"
+                                                class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-[#252240] transition-colors disabled:opacity-50">
+                                                @if (_deletingSectionId == sec.Id)
+                                                {
+                                                    <div class="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
+                                                }
+                                                else
+                                                {
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                }
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Add New Section -->
+                    @if (_isAddingSection)
+                    {
+                        <div class="@(_sections.Count > 0 ? "mt-4" : "") p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                            <div class="space-y-3">
+                                <input type="text" @bind="_newSectionName" placeholder="Section name"
+                                    class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#252240] border border-gray-200 dark:border-[#3d3a5a] rounded-lg focus:outline-none focus:border-indigo-400" />
+                                <input type="text" @bind="_newSectionDescription" placeholder="Description (optional)"
+                                    class="w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-[#252240] border border-gray-200 dark:border-[#3d3a5a] rounded-lg focus:outline-none focus:border-indigo-400" />
+                                <div class="flex gap-2">
+                                    <button type="button" @onclick="AddSection" disabled="@_isSavingSection"
+                                        class="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                                        @(_isSavingSection ? "Adding..." : "Add Section")
+                                    </button>
+                                    <button type="button" @onclick="CancelAddSection"
+                                        class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-slate-300 bg-white dark:bg-[#252240] border border-gray-200 dark:border-[#3d3a5a] rounded-lg hover:bg-gray-50 dark:hover:bg-[#2d2a4a]">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <button type="button" @onclick="StartAddSection"
+                            class="@(_sections.Count > 0 ? "mt-4" : "") inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Add Section
+                        </button>
+                    }
+                </Card>
+            }
+
+            <!-- Error Message -->
+            <ErrorAlert Message="@_errorMessage" />
+
+            <!-- Actions -->
+            <div class="flex items-center justify-end gap-3 pt-4">
+                <a href="projects" class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200">
+                    Cancel
+                </a>
+                <PrimaryButton ButtonType="submit"
+                               Text="@(Id.HasValue ? "Save Changes" : "Create Project")"
+                               IsLoading="@_isSaving"
+                               ShowIcon="false" />
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private ProjectFormModel _model = new();
+    private List<ClientDto>? _clients;
+    private List<ProjectSectionDto> _sections = [];
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private string? _errorMessage;
+    private List<PageHeader.BreadcrumbItem> _breadcrumbs = [];
+
+    // Section management state
+    private bool _isAddingSection;
+    private string _newSectionName = "";
+    private string? _newSectionDescription;
+    private Guid? _editingSectionId;
+    private string _editSectionName = "";
+    private string? _editSectionDescription;
+    private bool _isSavingSection;
+    private Guid? _deletingSectionId;
+
+    private string ClientCurrency =>
+        _clients?.FirstOrDefault(c => c.Id == _model.ClientId)?.Currency ?? "USD";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new PageHeader.BreadcrumbItem("Projects", "/projects"),
+            new PageHeader.BreadcrumbItem(Id.HasValue ? "Edit Project" : "New Project")
+        ];
+
+        try
+        {
+            var clientsResponse = await GetClientsCall.Call(new GetClients { PageSize = 1000 });
+            _clients = clientsResponse?.Items ?? [];
+
+            if (Id.HasValue)
+            {
+                var project = await GetProjectCall.Call(new GetProject { Id = Id.Value });
+                if (project != null)
+                {
+                    _model = new ProjectFormModel
+                    {
+                        ClientId = project.ClientId,
+                        Name = project.Name,
+                        Description = project.Description,
+                        Status = project.Status,
+                        StartDate = project.StartDate,
+                        EndDate = project.EndDate,
+                        HourlyRateOverride = project.HourlyRateOverride
+                    };
+                    _sections = project.Sections;
+                }
+            }
+            else
+            {
+                _model.Status = "Active";
+                _model.StartDate = DateOnly.FromDateTime(DateTime.Today);
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load data: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (Id.HasValue)
+            {
+                await UpdateProjectCall.Call(new UpdateProject
+                {
+                    Id = Id.Value,
+                    Name = _model.Name,
+                    Description = _model.Description,
+                    Status = _model.Status,
+                    StartDate = _model.StartDate,
+                    EndDate = _model.EndDate,
+                    HourlyRateOverride = _model.HourlyRateOverride
+                });
+            }
+            else
+            {
+                await CreateProjectCall.Call(new CreateProject
+                {
+                    ClientId = _model.ClientId,
+                    Name = _model.Name,
+                    Description = _model.Description,
+                    StartDate = _model.StartDate,
+                    EndDate = _model.EndDate,
+                    HourlyRateOverride = _model.HourlyRateOverride
+                });
+            }
+            NavigationManager.NavigateTo("projects");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    // Section management methods
+    private void StartAddSection()
+    {
+        _isAddingSection = true;
+        _newSectionName = "";
+        _newSectionDescription = null;
+    }
+
+    private void CancelAddSection()
+    {
+        _isAddingSection = false;
+        _newSectionName = "";
+        _newSectionDescription = null;
+    }
+
+    private async Task AddSection()
+    {
+        if (string.IsNullOrWhiteSpace(_newSectionName) || !Id.HasValue) return;
+
+        _isSavingSection = true;
+        try
+        {
+            var sectionId = await CreateSectionCall.Call(new CreateProjectSection
+            {
+                ProjectId = Id.Value,
+                Name = _newSectionName.Trim(),
+                Description = string.IsNullOrWhiteSpace(_newSectionDescription) ? null : _newSectionDescription.Trim()
+            });
+
+            _sections.Add(new ProjectSectionDto(
+                sectionId,
+                Id.Value,
+                _newSectionName.Trim(),
+                string.IsNullOrWhiteSpace(_newSectionDescription) ? null : _newSectionDescription.Trim(),
+                _sections.Count,
+                0));
+
+            CancelAddSection();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to add section: {ex.Message}";
+        }
+        finally
+        {
+            _isSavingSection = false;
+        }
+    }
+
+    private void StartEditSection(ProjectSectionDto sec)
+    {
+        _editingSectionId = sec.Id;
+        _editSectionName = sec.Name;
+        _editSectionDescription = sec.Description;
+    }
+
+    private void CancelEditSection()
+    {
+        _editingSectionId = null;
+        _editSectionName = "";
+        _editSectionDescription = null;
+    }
+
+    private async Task SaveEditSection()
+    {
+        if (string.IsNullOrWhiteSpace(_editSectionName) || !_editingSectionId.HasValue) return;
+
+        _isSavingSection = true;
+        try
+        {
+            await UpdateSectionCall.Call(new UpdateProjectSection
+            {
+                Id = _editingSectionId.Value,
+                Name = _editSectionName.Trim(),
+                Description = string.IsNullOrWhiteSpace(_editSectionDescription) ? null : _editSectionDescription.Trim()
+            });
+
+            var index = _sections.FindIndex(s => s.Id == _editingSectionId.Value);
+            if (index >= 0)
+            {
+                var old = _sections[index];
+                _sections[index] = old with
+                {
+                    Name = _editSectionName.Trim(),
+                    Description = string.IsNullOrWhiteSpace(_editSectionDescription) ? null : _editSectionDescription.Trim()
+                };
+            }
+
+            CancelEditSection();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to update section: {ex.Message}";
+        }
+        finally
+        {
+            _isSavingSection = false;
+        }
+    }
+
+    private async Task DeleteSection(ProjectSectionDto sec)
+    {
+        if (sec.JobCount > 0)
+        {
+            var confirmed = await ModalService.ShowAsync<bool>(
+                typeof(DeleteConfirmationModal),
+                "Delete Section",
+                new Dictionary<string, object>
+                {
+                    { "ItemName", sec.Name },
+                    { "WarningMessage", $"This section has {sec.JobCount} job(s). They will be unassigned from the section but not deleted." }
+                },
+                new ModalOptions { Size = ModalSize.Small });
+
+            if (!confirmed) return;
+        }
+
+        _deletingSectionId = sec.Id;
+        try
+        {
+            await DeleteSectionCall.Call(new DeleteProjectSection { Id = sec.Id });
+            _sections.RemoveAll(s => s.Id == sec.Id);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to delete section: {ex.Message}";
+        }
+        finally
+        {
+            _deletingSectionId = null;
+        }
+    }
+
+    public class ProjectFormModel
+    {
+        [Required(ErrorMessage = "Client is required")]
+        public Guid ClientId { get; set; }
+
+        [Required(ErrorMessage = "Project name is required")]
+        [StringLength(200, ErrorMessage = "Name cannot exceed 200 characters")]
+        public string Name { get; set; } = "";
+
+        [StringLength(2000)]
+        public string? Description { get; set; }
+
+        public DateOnly? StartDate { get; set; }
+
+        public DateOnly? EndDate { get; set; }
+
+        [Required]
+        public string Status { get; set; } = "Active";
+
+        [Range(0.01, 10000, ErrorMessage = "Rate must be between $0.01 and $10,000")]
+        public decimal? HourlyRateOverride { get; set; }
+    }
+}

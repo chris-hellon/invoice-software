@@ -1,0 +1,393 @@
+@using InvoiceSoftware.Shared.Dtos.Estimates
+
+@{
+    var isExpired = Status != "Accepted" && Status != "Rejected" && Status != "Converted" && ExpiryDate.HasValue && ExpiryDate.Value < DateOnly.FromDateTime(DateTime.Today);
+    var isAccepted = Status == "Accepted";
+    var isRejected = Status == "Rejected";
+    var isConverted = Status == "Converted";
+}
+
+<!-- Status Banner -->
+@if (isAccepted)
+{
+    <StatusBanner Variant="StatusBanner.StatusVariant.Success"
+                  Title="Accepted"
+                  Subtitle="@AcceptedDate?.ToString("MMMM d, yyyy")" />
+}
+else if (isRejected)
+{
+    <StatusBanner Variant="StatusBanner.StatusVariant.Danger"
+                  Title="Rejected"
+                  Subtitle="@RejectedDate?.ToString("MMMM d, yyyy")" />
+}
+else if (isConverted)
+{
+    <StatusBanner Variant="StatusBanner.StatusVariant.Purple"
+                  Title="Converted to Invoice" />
+}
+else if (isExpired)
+{
+    var daysPastExpiry = DateOnly.FromDateTime(DateTime.Today).DayNumber - ExpiryDate!.Value.DayNumber;
+    <StatusBanner Variant="StatusBanner.StatusVariant.Warning"
+                  Title="Expired"
+                  Subtitle="@($"{daysPastExpiry} days ago")" />
+}
+else if (Status == "Sent")
+{
+    <StatusBanner Variant="StatusBanner.StatusVariant.Info"
+                  Title="Awaiting Response"
+                  Subtitle="@(ExpiryDate.HasValue ? $"Valid until {ExpiryDate.Value:MMMM d, yyyy}" : null)" />
+}
+else if (Status == "Draft")
+{
+    <StatusBanner Variant="StatusBanner.StatusVariant.Warning"
+                  Title="Draft"
+                  Subtitle="Not yet sent" />
+}
+
+<!-- Estimate Header -->
+<div class="p-8 border-b border-gray-100 dark:border-slate-700">
+    @if (HeaderLayout == "centered")
+    {
+        <!-- Centered Header Layout with colored background -->
+        <div class="rounded-xl p-6 mb-6 text-center" style="background-color: @PrimaryColor;">
+            @if (ShowLogo && BusinessLogo is { Length: > 0 })
+            {
+                <div class="mb-4 flex justify-center">
+                    <img src="data:image/png;base64,@Convert.ToBase64String(BusinessLogo)" alt="Business Logo" class="h-12 object-contain brightness-0 invert" />
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(BusinessName))
+            {
+                <h2 class="text-xl font-bold text-white">@BusinessName</h2>
+            }
+            @if (!string.IsNullOrEmpty(BusinessAddress))
+            {
+                <div class="mt-2 text-sm text-white/80 whitespace-pre-line">@BusinessAddress</div>
+            }
+        </div>
+        <div class="text-center">
+            <div class="text-3xl font-bold text-gray-900 dark:text-white" style="font-family: 'Plus Jakarta Sans', sans-serif;">
+                @EstimateNumber
+            </div>
+            <div class="text-sm text-gray-500 dark:text-slate-400 mt-1">ESTIMATE</div>
+            <div class="flex justify-center gap-6 mt-4 text-sm">
+                <div>
+                    <span class="text-gray-500 dark:text-slate-400">Date:</span>
+                    <span class="font-medium text-gray-900 dark:text-white ml-1">@EstimateDate.ToString("MMM d, yyyy")</span>
+                </div>
+                @if (ExpiryDate.HasValue)
+                {
+                    <div>
+                        <span class="text-gray-500 dark:text-slate-400">Valid Until:</span>
+                        <span class="font-medium @(isExpired ? "text-amber-600 dark:text-amber-400" : "text-gray-900 dark:text-white") ml-1">@ExpiryDate.Value.ToString("MMM d, yyyy")</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else if (HeaderLayout == "minimal")
+    {
+        <!-- Minimal Header Layout -->
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                @if (ShowLogo && BusinessLogo is { Length: > 0 })
+                {
+                    <img src="data:image/png;base64,@Convert.ToBase64String(BusinessLogo)" alt="Business Logo" class="h-10 object-contain" />
+                }
+                <div>
+                    <div class="text-2xl font-bold text-gray-900 dark:text-white" style="font-family: 'Plus Jakarta Sans', sans-serif;">
+                        @EstimateNumber
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-slate-400">
+                        @EstimateDate.ToString("MMM d, yyyy")@(ExpiryDate.HasValue ? $" — Valid until {ExpiryDate.Value:MMM d, yyyy}" : "")
+                    </div>
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="text-3xl font-bold @(isAccepted ? "text-emerald-600" : "")" style="@(isAccepted ? "" : $"color: {PrimaryColor};")">
+                    @CurrencyExtensions.GetSymbol(Currency)@Total.ToString("N2")
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Standard Header Layout (default) with colored background -->
+        <div class="rounded-xl p-6 mb-6" style="background-color: @PrimaryColor;">
+            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                <!-- From (Business) -->
+                <div>
+                    @if (ShowLogo && BusinessLogo is { Length: > 0 })
+                    {
+                        <div class="mb-4">
+                            <img src="data:image/png;base64,@Convert.ToBase64String(BusinessLogo)" alt="Business Logo" class="h-12 object-contain brightness-0 invert" />
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(BusinessName))
+                    {
+                        <h2 class="text-xl font-bold text-white">@BusinessName</h2>
+                    }
+                    @if (!string.IsNullOrEmpty(BusinessAddress))
+                    {
+                        <div class="mt-2 text-sm text-white/80 whitespace-pre-line">@BusinessAddress</div>
+                    }
+                </div>
+            </div>
+        </div>
+        <!-- Estimate Number & Dates below colored header -->
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+            <div>
+                @if (!string.IsNullOrEmpty(BusinessEmail))
+                {
+                    <div class="text-sm text-gray-500 dark:text-slate-500">@BusinessEmail</div>
+                }
+                @if (!string.IsNullOrEmpty(BusinessPhone))
+                {
+                    <div class="text-sm text-gray-500 dark:text-slate-500">@BusinessPhone</div>
+                }
+                @if (!string.IsNullOrEmpty(TaxNumber))
+                {
+                    <div class="mt-2 text-xs text-gray-400 dark:text-slate-500">Tax/VAT: @TaxNumber</div>
+                }
+                @if (!string.IsNullOrEmpty(RegistrationNumber))
+                {
+                    <div class="text-xs text-gray-400 dark:text-slate-500">Reg: @RegistrationNumber</div>
+                }
+            </div>
+            <div class="text-left lg:text-right">
+                <div class="text-3xl font-bold text-gray-900 dark:text-white" style="font-family: 'Plus Jakarta Sans', sans-serif;">
+                    @EstimateNumber
+                </div>
+                <div class="text-sm text-gray-500 dark:text-slate-400 mt-1">ESTIMATE</div>
+                <div class="flex flex-wrap items-center gap-4 mt-4 text-sm">
+                    <div>
+                        <span class="text-gray-500 dark:text-slate-400">Date:</span>
+                        <span class="font-medium text-gray-900 dark:text-white ml-1">@EstimateDate.ToString("MMM d, yyyy")</span>
+                    </div>
+                    @if (ExpiryDate.HasValue)
+                    {
+                        <div>
+                            <span class="text-gray-500 dark:text-slate-400">Valid Until:</span>
+                            <span class="font-medium @(isExpired ? "text-amber-600 dark:text-amber-400" : "text-gray-900 dark:text-white") ml-1">@ExpiryDate.Value.ToString("MMM d, yyyy")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Prepared For Section -->
+    <div class="mt-8 pt-6 border-t border-gray-100 dark:border-slate-700">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 @(HeaderLayout == "centered" ? "text-center md:text-left" : "")">
+            <!-- Prepared For -->
+            <div>
+                <div class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-2">Prepared For</div>
+                <div class="text-base font-semibold text-gray-900 dark:text-white">@ClientName</div>
+                @if (!string.IsNullOrEmpty(ClientCompanyName))
+                {
+                    <div class="text-sm text-gray-600 dark:text-slate-400">@ClientCompanyName</div>
+                }
+                @if (!string.IsNullOrEmpty(ClientAddress))
+                {
+                    <div class="mt-2 text-sm text-gray-600 dark:text-slate-400 whitespace-pre-line">@ClientAddress</div>
+                }
+                @if (!string.IsNullOrEmpty(ClientEmail))
+                {
+                    <div class="mt-2 text-sm text-gray-500 dark:text-slate-500">@ClientEmail</div>
+                }
+            </div>
+
+            <!-- Estimated Total (hide for minimal layout - shown in header) -->
+            @if (HeaderLayout != "minimal")
+            {
+                <div class="@(HeaderLayout == "centered" ? "text-center md:text-right" : "text-right")">
+                    <div class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-2">Estimated Total</div>
+                    <div class="text-4xl font-bold @(isAccepted ? "text-emerald-600" : "")" style="@(isAccepted ? "" : $"color: {PrimaryColor};")">
+                        @CurrencyExtensions.GetSymbol(Currency)@Total.ToString("N2")
+                    </div>
+                    @if (isAccepted)
+                    {
+                        <div class="text-sm text-emerald-600">Accepted</div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Line Items Section -->
+@if (LineItems?.Any() == true)
+{
+    <div class="px-8 py-3 border-b" style="background-color: @(AccentColor)10; border-color: @(AccentColor)30;">
+        <div class="flex items-center gap-2">
+            <svg class="w-4 h-4" style="color: @AccentColor;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <span class="text-xs font-semibold uppercase tracking-wider" style="color: @AccentColor;">Items</span>
+        </div>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="bg-gray-50/50 dark:bg-slate-800/30 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">
+                    <th class="px-8 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">Description</th>
+                    <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">Qty</th>
+                    <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">Rate</th>
+                    <th class="px-8 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">Amount</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                @{
+                    var itemIndex = 0;
+                }
+                @foreach (var item in LineItems)
+                {
+                    var rowClass = ItemsLayout switch
+                    {
+                        "striped" => itemIndex % 2 == 0 ? "bg-gray-50/50 dark:bg-slate-800/30" : "",
+                        _ => "hover:bg-gray-50/50 dark:hover:bg-slate-700/30 transition-colors"
+                    };
+                    <tr class="@rowClass">
+                        <td class="px-8 py-5 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">@item.Description</div>
+                        </td>
+                        <td class="px-6 py-5 text-sm text-gray-700 dark:text-slate-300 text-center @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">@item.Quantity.ToString("N2")</td>
+                        <td class="px-6 py-5 text-sm text-gray-600 dark:text-slate-400 text-right @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">@CurrencyExtensions.GetSymbol(Currency)@item.UnitPrice.ToString("N2")</td>
+                        <td class="px-8 py-5 text-sm font-semibold text-gray-900 dark:text-white text-right @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">@CurrencyExtensions.GetSymbol(Currency)@item.LineTotal.ToString("N2")</td>
+                    </tr>
+                    itemIndex++;
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Totals Section -->
+<div class="p-8 border-t border-gray-100 dark:border-slate-700 bg-gray-50/30 dark:bg-slate-800/20">
+    <div class="flex justify-end">
+        <div class="w-72 space-y-3">
+            @if (FooterLayout == "detailed" || TaxRate > 0)
+            {
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 dark:text-slate-400">Subtotal</span>
+                    <span class="text-gray-900 dark:text-white">@CurrencyExtensions.GetSymbol(Currency)@Subtotal.ToString("N2")</span>
+                </div>
+                @if (TaxRate > 0)
+                {
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500 dark:text-slate-400">Tax (@TaxRate.ToString("N1")%)</span>
+                        <span class="text-gray-900 dark:text-white">@CurrencyExtensions.GetSymbol(Currency)@TaxAmount.ToString("N2")</span>
+                    </div>
+                }
+                else if (FooterLayout == "detailed")
+                {
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500 dark:text-slate-400">Tax</span>
+                        <span class="text-gray-900 dark:text-white">@CurrencyExtensions.GetSymbol(Currency)0.00</span>
+                    </div>
+                }
+                <div class="pt-3 border-t border-gray-200 dark:border-slate-600"></div>
+            }
+            <div class="flex justify-between items-center pt-2">
+                <span class="text-base font-semibold text-gray-900 dark:text-white">Total</span>
+                <span class="text-2xl font-bold @(isAccepted ? "text-emerald-600" : "")" style="@(isAccepted ? "" : $"color: {PrimaryColor};")">@CurrencyExtensions.GetSymbol(Currency)@Total.ToString("N2")</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notes Section -->
+@if (!string.IsNullOrEmpty(Notes))
+{
+    <div class="p-8 border-t border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/30">
+        <div class="flex gap-4">
+            <div class="flex-shrink-0">
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+            </div>
+            <div>
+                <div class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-2">Notes</div>
+                <div class="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-line">@Notes</div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Terms Section -->
+@if (!string.IsNullOrEmpty(Terms))
+{
+    <div class="p-8 border-t border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/30">
+        <div class="flex gap-4">
+            <div class="flex-shrink-0">
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </div>
+            <div>
+                <div class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-2">Terms & Conditions</div>
+                <div class="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-line">@Terms</div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Footer -->
+<div class="px-8 py-4 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
+    <p class="text-center text-xs text-gray-400 dark:text-slate-500">
+        @if (ExpiryDate.HasValue)
+        {
+            @:This estimate is valid until @ExpiryDate.Value.ToString("MMMM d, yyyy").
+        }
+        else
+        {
+            @:Thank you for considering our services.
+        }
+    </p>
+</div>
+
+@code {
+    // Estimate identification
+    [Parameter] public string EstimateNumber { get; set; } = "";
+    [Parameter] public string Status { get; set; } = "";
+    [Parameter] public string Currency { get; set; } = "USD";
+    [Parameter] public DateOnly EstimateDate { get; set; }
+    [Parameter] public DateOnly? ExpiryDate { get; set; }
+    [Parameter] public DateOnly? AcceptedDate { get; set; }
+    [Parameter] public DateOnly? RejectedDate { get; set; }
+
+    // Business info
+    [Parameter] public string? BusinessName { get; set; }
+    [Parameter] public string? BusinessAddress { get; set; }
+    [Parameter] public string? BusinessEmail { get; set; }
+    [Parameter] public string? BusinessPhone { get; set; }
+    [Parameter] public byte[]? BusinessLogo { get; set; }
+    [Parameter] public string? TaxNumber { get; set; }
+    [Parameter] public string? RegistrationNumber { get; set; }
+
+    // Client info
+    [Parameter] public string ClientName { get; set; } = "";
+    [Parameter] public string? ClientCompanyName { get; set; }
+    [Parameter] public string? ClientAddress { get; set; }
+    [Parameter] public string? ClientEmail { get; set; }
+
+    // Amounts
+    [Parameter] public decimal Subtotal { get; set; }
+    [Parameter] public decimal TaxRate { get; set; }
+    [Parameter] public decimal TaxAmount { get; set; }
+    [Parameter] public decimal Total { get; set; }
+    [Parameter] public string? Notes { get; set; }
+    [Parameter] public string? Terms { get; set; }
+
+    // Line items
+    [Parameter] public List<EstimateLineItemDto>? LineItems { get; set; }
+
+    // Template settings
+    [Parameter] public string PrimaryColor { get; set; } = "#4f46e5";
+    [Parameter] public string AccentColor { get; set; } = "#059669";
+    [Parameter] public bool ShowLogo { get; set; } = true;
+    [Parameter] public string HeaderLayout { get; set; } = "standard";
+    [Parameter] public string ItemsLayout { get; set; } = "standard";
+    [Parameter] public string FooterLayout { get; set; } = "standard";
+}

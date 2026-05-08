@@ -1,0 +1,50 @@
+@* List page layout component combining header, search, and content area *@
+
+<div class="space-y-6">
+    <!-- Header -->
+    <PageHeader Title="@Title" Description="@Description" Breadcrumbs="@Breadcrumbs">
+        <PrimaryButton Href="@ActionUrl" Text="@ActionText" />
+    </PageHeader>
+
+    <!-- Search and Filter Bar -->
+    <SearchBar Placeholder="@SearchPlaceholder"
+               Value="@SearchValue"
+               ValueChanged="SearchValueChanged">
+        @Filters
+    </SearchBar>
+
+    <!-- Content -->
+    @ChildContent
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter, EditorRequired]
+    public string ActionUrl { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public string ActionText { get; set; } = "";
+
+    [Parameter]
+    public string SearchPlaceholder { get; set; } = "Search...";
+
+    [Parameter]
+    public string SearchValue { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> SearchValueChanged { get; set; }
+
+    [Parameter]
+    public RenderFragment? Filters { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public List<PageHeader.BreadcrumbItem>? Breadcrumbs { get; set; }
+}

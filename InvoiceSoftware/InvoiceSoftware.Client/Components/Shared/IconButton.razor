@@ -1,0 +1,51 @@
+@* Reusable icon button component for common actions *@
+
+@if (!string.IsNullOrEmpty(Href))
+{
+    <a href="@Href" @onclick:stopPropagation="@StopPropagation"
+       class="@GetButtonClasses()" title="@Title">
+        @ChildContent
+    </a>
+}
+else
+{
+    <button type="button" @onclick="OnClick" @onclick:stopPropagation="@StopPropagation"
+            disabled="@Disabled" class="@GetButtonClasses()" title="@Title">
+        @ChildContent
+    </button>
+}
+
+@code {
+    [Parameter]
+    public string? Href { get; set; }
+
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public bool StopPropagation { get; set; } = true;
+
+    [Parameter]
+    public IconButtonVariant Variant { get; set; } = IconButtonVariant.Default;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    public enum IconButtonVariant
+    {
+        Default,
+        Danger
+    }
+
+    private string GetButtonClasses() => Variant switch
+    {
+        IconButtonVariant.Danger => "p-2 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+        _ => "p-2 text-gray-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    };
+}

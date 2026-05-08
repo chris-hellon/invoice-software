@@ -1,0 +1,57 @@
+@typeparam TItem
+
+<div class="bg-white dark:bg-[#1a1827] rounded-2xl border border-gray-100 dark:border-[#2d2a4a] overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full">
+            <thead>
+                <tr class="bg-gray-50/80 dark:bg-[#1a1827]/80">
+                    @HeaderTemplate
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-[#2d2a4a]">
+                @if (Items != null)
+                {
+                    @foreach (var item in Items)
+                    {
+                        @RowTemplate(item)
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (TotalCount > PageSize)
+{
+    <Pagination CurrentPage="CurrentPage"
+                TotalItems="TotalCount"
+                PageSize="PageSize"
+                ItemName="@ItemName"
+                OnPageChanged="OnPageChanged" />
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IEnumerable<TItem>? Items { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment? HeaderTemplate { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment<TItem> RowTemplate { get; set; } = default!;
+
+    [Parameter]
+    public int CurrentPage { get; set; } = 1;
+
+    [Parameter]
+    public int TotalCount { get; set; }
+
+    [Parameter]
+    public int PageSize { get; set; } = 15;
+
+    [Parameter]
+    public string ItemName { get; set; } = "items";
+
+    [Parameter]
+    public EventCallback<int> OnPageChanged { get; set; }
+}

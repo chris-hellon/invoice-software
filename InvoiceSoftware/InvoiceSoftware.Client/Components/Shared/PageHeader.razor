@@ -1,0 +1,86 @@
+@* Page header component with breadcrumbs, optional back button and action button *@
+
+<div class="mb-8">
+    @if (Breadcrumbs?.Any() == true)
+    {
+        <nav class="flex items-center gap-2 text-sm mb-4" aria-label="Breadcrumb">
+            <a href="/" class="text-gray-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+            </a>
+            @foreach (var (crumb, index) in Breadcrumbs.Select((c, i) => (c, i)))
+            {
+                <svg class="w-4 h-4 text-gray-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                </svg>
+                @if (index == Breadcrumbs.Count - 1)
+                {
+                    <span class="font-medium text-gray-900 dark:text-slate-100">@crumb.Label</span>
+                }
+                else
+                {
+                    <a href="@crumb.Href" class="text-gray-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">@crumb.Label</a>
+                }
+            }
+        </nav>
+    }
+
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="flex items-center gap-4">
+            @if (ShowBackButton && !string.IsNullOrEmpty(BackUrl))
+            {
+                <a href="@BackUrl" class="p-2.5 -ml-2.5 rounded-xl text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                </a>
+            }
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-slate-100 tracking-tight" style="font-family: 'Plus Jakarta Sans', sans-serif;">@Title</h1>
+                @if (!string.IsNullOrEmpty(Description))
+                {
+                    <p class="mt-1 text-sm text-gray-500 dark:text-slate-400">@Description</p>
+                }
+            </div>
+        </div>
+        @if (ChildContent != null)
+        {
+            @ChildContent
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public bool ShowBackButton { get; set; }
+
+    [Parameter]
+    public string? BackUrl { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public List<BreadcrumbItem>? Breadcrumbs { get; set; }
+
+    public class BreadcrumbItem
+    {
+        public string Label { get; set; } = "";
+        public string Href { get; set; } = "";
+
+        public BreadcrumbItem() { }
+
+        public BreadcrumbItem(string label, string href = "")
+        {
+            Label = label;
+            Href = href;
+        }
+    }
+}

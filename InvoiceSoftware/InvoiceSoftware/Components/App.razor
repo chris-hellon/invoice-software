@@ -1,0 +1,56 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<script>
+    // Apply dark mode immediately to prevent flash - runs before any content renders
+    (function() {
+        try {
+            var stored = localStorage.getItem('darkMode');
+            // Only apply if user has explicitly set preference, or fall back to system preference
+            if (stored === 'true' || (stored === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        } catch (e) {}
+    })();
+</script>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <base href="/"/>
+    <ResourcePreloader/>
+    <!-- Premium Fonts: Inter for UI, Plus Jakarta Sans for headings -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="@Assets["css/shared.css"]"/>
+    <link rel="stylesheet" href="@Assets["InvoiceSoftware.styles.css"]"/>
+    <ImportMap/>
+    <link rel="icon" type="image/png" href="favicon.png"/>
+    <HeadOutlet @rendermode="PageRenderMode"/>
+</head>
+
+<body>
+<Routes @rendermode="PageRenderMode"/>
+<ReconnectModal/>
+<script src="@Assets["_framework/blazor.web.js"]"></script>
+<script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]" type="module"></script>
+<script>
+    window.downloadFile = function(fileName, base64, contentType) {
+        const link = document.createElement('a');
+        link.href = 'data:' + contentType + ';base64,' + base64;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+</script>
+</body>
+
+</html>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = null!;
+
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.AcceptsInteractiveRouting() ? new InteractiveAutoRenderMode(false) : null;
+
+}

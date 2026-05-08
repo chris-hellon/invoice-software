@@ -1,0 +1,55 @@
+@page "/invoice/{Id:guid}/email-template"
+@layout EmptyLayout
+@attribute [Authorize]
+
+@inject ICall<GetInvoiceEmailTemplate, string?> GetEmailTemplateCall
+
+@if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f3f4f6;">
+        <div style="text-align: center;">
+            <div style="width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #6366f1; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+            <p style="color: #6b7280; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">Loading email template...</p>
+        </div>
+    </div>
+    <style>
+        @@keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+}
+else if (_htmlContent == null)
+{
+    <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="text-align: center; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <p style="color: #dc2626; font-size: 18px; font-weight: 600; margin: 0 0 8px;">Invoice not found</p>
+            <p style="color: #6b7280; margin: 0;">The requested invoice could not be loaded.</p>
+        </div>
+    </div>
+}
+else
+{
+    @((MarkupString)_htmlContent)
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool _isLoading = true;
+    private string? _htmlContent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _htmlContent = await GetEmailTemplateCall.Call(new GetInvoiceEmailTemplate { Id = Id });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading email template: {ex.Message}");
+            _htmlContent = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

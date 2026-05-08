@@ -1,0 +1,92 @@
+@* Generic Status Badge Component - For use in cards, tables, and lists *@
+
+@{
+    var config = GetStatusConfig();
+}
+<span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg @config.BgClass @config.TextClass">
+    @Status
+</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Status { get; set; } = "";
+
+    [Parameter]
+    public StatusType Type { get; set; } = StatusType.Invoice;
+
+    public enum StatusType
+    {
+        Invoice,
+        Estimate
+    }
+
+    private record StatusConfig(string BgClass, string TextClass);
+
+    private StatusConfig GetStatusConfig()
+    {
+        if (Type == StatusType.Invoice)
+        {
+            return Status switch
+            {
+                "Paid" => new(
+                    "bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-inset ring-emerald-600/20",
+                    "text-emerald-700 dark:text-emerald-400"
+                ),
+                "Sent" => new(
+                    "bg-blue-50 dark:bg-blue-900/30 ring-1 ring-inset ring-blue-600/20",
+                    "text-blue-700 dark:text-blue-400"
+                ),
+                "Draft" => new(
+                    "bg-amber-50 dark:bg-amber-900/30 ring-1 ring-inset ring-amber-600/20",
+                    "text-amber-700 dark:text-amber-400"
+                ),
+                "Overdue" => new(
+                    "bg-red-50 dark:bg-red-900/30 ring-1 ring-inset ring-red-600/20",
+                    "text-red-700 dark:text-red-400"
+                ),
+                "Void" => new(
+                    "bg-gray-50 dark:bg-slate-700 ring-1 ring-inset ring-gray-500/20 dark:ring-slate-500/30",
+                    "text-gray-600 dark:text-slate-400"
+                ),
+                _ => new(
+                    "bg-gray-50 dark:bg-slate-700 ring-1 ring-inset ring-gray-500/20 dark:ring-slate-500/30",
+                    "text-gray-600 dark:text-slate-400"
+                )
+            };
+        }
+        else // Estimate
+        {
+            return Status switch
+            {
+                "Accepted" => new(
+                    "bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-inset ring-emerald-600/20",
+                    "text-emerald-700 dark:text-emerald-400"
+                ),
+                "Sent" => new(
+                    "bg-blue-50 dark:bg-blue-900/30 ring-1 ring-inset ring-blue-600/20",
+                    "text-blue-700 dark:text-blue-400"
+                ),
+                "Draft" => new(
+                    "bg-amber-50 dark:bg-amber-900/30 ring-1 ring-inset ring-amber-600/20",
+                    "text-amber-700 dark:text-amber-400"
+                ),
+                "Rejected" => new(
+                    "bg-red-50 dark:bg-red-900/30 ring-1 ring-inset ring-red-600/20",
+                    "text-red-700 dark:text-red-400"
+                ),
+                "Expired" => new(
+                    "bg-amber-50 dark:bg-amber-900/30 ring-1 ring-inset ring-amber-600/20",
+                    "text-amber-700 dark:text-amber-400"
+                ),
+                "Converted" => new(
+                    "bg-purple-50 dark:bg-purple-900/30 ring-1 ring-inset ring-purple-600/20",
+                    "text-purple-700 dark:text-purple-400"
+                ),
+                _ => new(
+                    "bg-gray-50 dark:bg-slate-700 ring-1 ring-inset ring-gray-500/20 dark:ring-slate-500/30",
+                    "text-gray-600 dark:text-slate-400"
+                )
+            };
+        }
+    }
+}

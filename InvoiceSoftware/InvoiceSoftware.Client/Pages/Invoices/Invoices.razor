@@ -1,0 +1,214 @@
+@page "/invoices"
+
+@inject ICall<GetInvoices, PaginatedResponse<InvoiceSummaryDto>> GetInvoicesCall
+@inject ICall<GetInvoicePdf, byte[]> GetInvoicePdfCall
+@inject ICall<DeleteInvoice> DeleteInvoiceCall
+@inject NavigationManager Navigation
+
+<PageTitle>Invoices - InvoicePro</PageTitle>
+
+<ListPageLayout Title="Invoices"
+                Description="Manage and track your invoices."
+                ActionUrl="invoices/new"
+                ActionText="New Invoice"
+                SearchPlaceholder="Search invoices..."
+                SearchValue="@_searchTerm"
+                SearchValueChanged="OnSearchChanged"
+                Breadcrumbs="@(new List<PageHeader.BreadcrumbItem> { new("Invoices") })">
+    <Filters>
+        <select @bind="_selectedStatus" @bind:after="OnFilterChanged" class="py-3 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="">All Status</option>
+            <option value="Draft">Draft</option>
+            <option value="Sent">Sent</option>
+            <option value="Paid">Paid</option>
+            <option value="Overdue">Overdue</option>
+            <option value="Void">Void</option>
+        </select>
+    </Filters>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <LoadingTable Rows="5" Columns="7" />
+        }
+        else if (_response == null || !_response.Items.Any())
+        {
+            <EmptyState Title="No invoices found"
+                        Message="@(HasActiveFilters ? "No invoices match your filters. Try adjusting your search." : "Get started by creating your first invoice.")"
+                        IconType="EmptyState.EmptyStateIcon.Document"
+                        ActionUrl="@(HasActiveFilters ? null : "invoices/new")"
+                        ActionText="@(HasActiveFilters ? null : "New Invoice")" />
+        }
+        else
+        {
+            <DataTable TItem="InvoiceSummaryDto"
+                       Items="_response.Items"
+                       CurrentPage="_response.Page"
+                       TotalCount="_response.TotalCount"
+                       PageSize="_response.PageSize"
+                       ItemName="invoices"
+                       OnPageChanged="OnPageChanged">
+                <HeaderTemplate>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Invoice</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Client</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Due</th>
+                    <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Amount</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                    <th scope="col" class="relative px-6 py-4"><span class="sr-only">Actions</span></th>
+                </HeaderTemplate>
+                <RowTemplate Context="invoice">
+                    @{ var isOverdue = invoice.Status != "Paid" && invoice.Status != "Void" && invoice.DueDate < DateOnly.FromDateTime(DateTime.Today); }
+                    <tr class="group hover:bg-gray-50/50 dark:hover:bg-[#2d2a4a]/50 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900 dark:text-slate-100">@invoice.InvoiceNumber</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-slate-100">@invoice.ClientName</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-slate-100">@invoice.IssueDate.ToString("MMM d, yyyy")</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm @(isOverdue ? "text-red-600 dark:text-red-400 font-medium" : "text-gray-900 dark:text-slate-100")">
+                                @invoice.DueDate.ToString("MMM d, yyyy")
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <div class="text-sm font-semibold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(invoice.Currency)@invoice.Total.ToString("N2")</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="@InvoiceStatusExtensions.Parse(invoice.Status).GetBadgeClass()">@invoice.Status</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <div class="flex items-center justify-end gap-1">
+                                <a href="invoices/@invoice.Id" class="p-2 text-gray-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-lg transition-colors" title="View">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                </a>
+                                @if (invoice.Status == "Draft")
+                                {
+                                    <a href="invoices/@invoice.Id/edit" class="p-2 text-gray-400 dark:text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/50 rounded-lg transition-colors" title="Edit">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                    </a>
+                                    <button @onclick="() => DeleteInvoice(invoice.Id, invoice.InvoiceNumber)" @onclick:stopPropagation="true" class="p-2 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg transition-colors" title="Delete">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                }
+                                <button @onclick="() => DownloadPdf(invoice.Id, invoice.InvoiceNumber)" class="p-2 text-gray-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/50 rounded-lg transition-colors" title="Download PDF">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </RowTemplate>
+            </DataTable>
+        }
+    </ChildContent>
+</ListPageLayout>
+
+@code {
+    private PaginatedResponse<InvoiceSummaryDto>? _response;
+    private bool _isLoading = true;
+    private string _searchTerm = "";
+    private string _selectedStatus = "";
+    private int _currentPage = 1;
+    private const int PageSize = 15;
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_searchTerm) || !string.IsNullOrEmpty(_selectedStatus);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInvoices();
+    }
+
+    private async Task LoadInvoices()
+    {
+        _isLoading = true;
+        try
+        {
+            _response = await GetInvoicesCall.Call(new GetInvoices
+            {
+                Status = string.IsNullOrEmpty(_selectedStatus) ? null : _selectedStatus,
+                Page = _currentPage,
+                PageSize = PageSize,
+                Search = _searchTerm
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading invoices: {ex.Message}");
+            _response = new PaginatedResponse<InvoiceSummaryDto>();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        _currentPage = 1;
+        await LoadInvoices();
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        _searchTerm = value;
+        _currentPage = 1;
+        await LoadInvoices();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadInvoices();
+    }
+
+    private async Task DownloadPdf(Guid invoiceId, string invoiceNumber)
+    {
+        try
+        {
+            var bytes = await GetInvoicePdfCall.Call(new GetInvoicePdf { Id = invoiceId });
+            if (bytes is { Length: > 0 })
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                var fileName = $"Invoice-{invoiceNumber}.pdf";
+                await Js.InvokeVoidAsync("downloadFile", fileName, base64, "application/pdf");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error downloading PDF: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteInvoice(Guid invoiceId, string invoiceNumber)
+    {
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Invoice",
+            new Dictionary<string, object>
+            {
+                ["ItemName"] = $"Invoice {invoiceNumber}",
+                ["WarningMessage"] = "This action cannot be undone. The invoice will be permanently removed.",
+                ["OnDelete"] = new Func<Task>(async () =>
+                {
+                    await DeleteInvoiceCall.Call(new DeleteInvoice { Id = invoiceId });
+                })
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (confirmed)
+        {
+            await LoadInvoices();
+        }
+    }
+}

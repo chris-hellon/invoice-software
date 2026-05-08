@@ -1,0 +1,217 @@
+@page "/expenses"
+
+@inject ICall<GetExpenses, PaginatedResponse<ExpenseSummaryDto>> GetExpensesCall
+@inject ICall<DeleteExpense> DeleteExpenseCall
+
+<PageTitle>Expenses - InvoicePro</PageTitle>
+
+<ListPageLayout Title="Expenses"
+                Description="Track and manage your business expenses."
+                ActionUrl="expenses/new"
+                ActionText="New Expense"
+                SearchPlaceholder="Search expenses..."
+                SearchValue="@_searchTerm"
+                SearchValueChanged="OnSearchChanged"
+                Breadcrumbs="@(new List<PageHeader.BreadcrumbItem> { new("Expenses") })">
+    <Filters>
+        <select @bind="_selectedCategory" @bind:after="OnFilterChanged" class="py-3 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="">All Categories</option>
+            @foreach (var category in Enum.GetValues<ExpenseCategory>())
+            {
+                <option value="@category.ToString()">@category.GetDisplayName()</option>
+            }
+        </select>
+        <select @bind="_selectedBillable" @bind:after="OnFilterChanged" class="py-3 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="">All Expenses</option>
+            <option value="true">Billable</option>
+            <option value="false">Non-Billable</option>
+        </select>
+    </Filters>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <LoadingTable Rows="5" Columns="7" />
+        }
+        else if (_response == null || !_response.Items.Any())
+        {
+            <EmptyState Title="No expenses found"
+                        Message="@(HasActiveFilters ? "No expenses match your filters. Try adjusting your search." : "Get started by recording your first expense.")"
+                        IconType="EmptyState.EmptyStateIcon.CreditCard"
+                        ActionUrl="@(HasActiveFilters ? null : "expenses/new")"
+                        ActionText="@(HasActiveFilters ? null : "New Expense")" />
+        }
+        else
+        {
+            <DataTable TItem="ExpenseSummaryDto"
+                       Items="_response.Items"
+                       CurrentPage="_response.Page"
+                       TotalCount="_response.TotalCount"
+                       PageSize="_response.PageSize"
+                       ItemName="expenses"
+                       OnPageChanged="OnPageChanged">
+                <HeaderTemplate>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Merchant</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Category</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Client / Project</th>
+                    <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Amount</th>
+                    <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                    <th scope="col" class="relative px-6 py-4"><span class="sr-only">Actions</span></th>
+                </HeaderTemplate>
+                <RowTemplate Context="expense">
+                    <tr class="group hover:bg-gray-50/50 dark:hover:bg-[#2d2a4a]/50 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900 dark:text-slate-100">@expense.ExpenseDate.ToString("MMM d, yyyy")</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <a href="expenses/@expense.Id" class="text-sm font-medium text-gray-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors hover:underline">@expense.MerchantName</a>
+                            @if (!string.IsNullOrEmpty(expense.GroupName))
+                            {
+                                <div class="text-sm text-gray-500 dark:text-slate-400">@expense.GroupName</div>
+                            }
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="@ExpenseCategoryExtensions.Parse(expense.Category).GetBadgeClass()">@ExpenseCategoryExtensions.Parse(expense.Category).GetDisplayName()</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            @if (expense.ClientName != null)
+                            {
+                                <div class="text-sm font-medium text-gray-900 dark:text-slate-100">@expense.ClientName</div>
+                                @if (expense.ProjectName != null)
+                                {
+                                    <div class="text-sm text-gray-500 dark:text-slate-400">@expense.ProjectName</div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="text-sm text-gray-400 dark:text-slate-500">-</div>
+                            }
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <div class="text-sm font-semibold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(expense.Currency)@expense.Amount.ToString("N2")</div>
+                            @if (expense.TaxAmount > 0)
+                            {
+                                <div class="text-xs text-gray-500 dark:text-slate-400">+ @CurrencyExtensions.GetSymbol(expense.Currency)@expense.TaxAmount.ToString("N2") tax</div>
+                            }
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            @if (expense.IsBillable)
+                            {
+                                @if (expense.IsBilled)
+                                {
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Billed</span>
+                                }
+                                else
+                                {
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Unbilled</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 dark:bg-slate-700 dark:text-slate-400">Non-Billable</span>
+                            }
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <div class="flex items-center justify-end gap-1">
+                                <IconButton Href="@($"expenses/{expense.Id}")" Title="View">
+                                    <ViewIcon />
+                                </IconButton>
+                                <IconButton Href="@($"expenses/{expense.Id}/edit")" Title="Edit">
+                                    <EditIcon />
+                                </IconButton>
+                                <IconButton OnClick="() => DeleteExpenseAsync(expense)" Variant="IconButton.IconButtonVariant.Danger" Title="Delete">
+                                    <DeleteIcon />
+                                </IconButton>
+                            </div>
+                        </td>
+                    </tr>
+                </RowTemplate>
+            </DataTable>
+        }
+    </ChildContent>
+</ListPageLayout>
+
+@code {
+    private PaginatedResponse<ExpenseSummaryDto>? _response;
+    private bool _isLoading = true;
+    private string _searchTerm = "";
+    private string _selectedCategory = "";
+    private string _selectedBillable = "";
+    private int _currentPage = 1;
+    private const int PageSize = 15;
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_searchTerm) || !string.IsNullOrEmpty(_selectedCategory) || !string.IsNullOrEmpty(_selectedBillable);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadExpenses();
+    }
+
+    private async Task LoadExpenses()
+    {
+        _isLoading = true;
+        try
+        {
+            _response = await GetExpensesCall.Call(new GetExpenses
+            {
+                Category = string.IsNullOrEmpty(_selectedCategory) ? null : _selectedCategory,
+                IsBillable = string.IsNullOrEmpty(_selectedBillable) ? null : bool.Parse(_selectedBillable),
+                Page = _currentPage,
+                PageSize = PageSize,
+                Search = _searchTerm
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading expenses: {ex.Message}");
+            _response = new PaginatedResponse<ExpenseSummaryDto>();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        _currentPage = 1;
+        await LoadExpenses();
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        _searchTerm = value;
+        _currentPage = 1;
+        await LoadExpenses();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadExpenses();
+    }
+
+    private async Task DeleteExpenseAsync(ExpenseSummaryDto expense)
+    {
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Expense",
+            new Dictionary<string, object>
+            {
+                { "ItemName", $"{expense.MerchantName} - {CurrencyExtensions.GetSymbol(expense.Currency)}{expense.Amount:N2}" }
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (!confirmed) return;
+
+        try
+        {
+            await DeleteExpenseCall.Call(new DeleteExpense { Id = expense.Id });
+            await LoadExpenses();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting expense: {ex.Message}");
+        }
+    }
+}

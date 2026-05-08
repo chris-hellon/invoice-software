@@ -1,0 +1,173 @@
+@page "/portal/{Token:guid}"
+@layout PortalLayout
+
+@inject ICall<GetClientPortalSummary, ClientPortalSummaryDto?> GetSummaryCall
+
+<PageTitle>Client Portal - @(_summary?.BusinessName ?? "Loading...")</PageTitle>
+
+<div class="min-h-screen bg-gray-50 dark:bg-slate-900">
+    @if (_isLoading)
+    {
+        <div class="flex items-center justify-center py-20">
+            <LoadingSpinner />
+        </div>
+    }
+    else if (_summary == null)
+    {
+        <div class="max-w-lg mx-auto px-4 py-20 text-center">
+            <div class="w-16 h-16 mx-auto bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+                <svg class="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            </div>
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-slate-100 mb-2">Portal Not Found</h2>
+            <p class="text-gray-500 dark:text-slate-400">This portal link is invalid or has expired. Please contact the business for a new link.</p>
+        </div>
+    }
+    else
+    {
+        <div class="max-w-6xl mx-auto px-4 py-8">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                @if (_summary.BusinessLogo != null)
+                {
+                    <img src="@($"data:{_summary.BusinessLogoContentType};base64,{Convert.ToBase64String(_summary.BusinessLogo)}")"
+                         alt="@_summary.BusinessName"
+                         class="h-16 mx-auto mb-4" />
+                }
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-slate-100">@_summary.BusinessName</h1>
+                <p class="text-gray-500 dark:text-slate-400 mt-1">
+                    Welcome, @(_summary.CompanyName ?? _summary.ClientName)
+                </p>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-slate-100">@_summary.TotalInvoices</p>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">Total Invoices</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-slate-100">@_summary.UnpaidInvoices</p>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">Unpaid Invoices</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(_summary.Currency)@_summary.TotalOutstanding.ToString("N2")</p>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">Outstanding</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-slate-100">@_summary.PendingEstimates</p>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">Pending Estimates</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <a href="@($"portal/{Token}/invoices")" class="group bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Invoices</h3>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">View and download your invoices</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="@($"portal/{Token}/estimates")" class="group bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">Estimates</h3>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">Review and respond to estimates</p>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="@($"portal/{Token}/payments")" class="group bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Payment History</h3>
+                            <p class="text-sm text-gray-500 dark:text-slate-400">View your payment records</p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Token { get; set; }
+
+    private ClientPortalSummaryDto? _summary;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _summary = await GetSummaryCall.Call(new GetClientPortalSummary { Token = Token });
+        }
+        catch
+        {
+            _summary = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

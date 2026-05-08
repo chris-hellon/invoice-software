@@ -1,0 +1,178 @@
+@page "/products"
+
+@inject ICall<GetProducts, PaginatedResponse<ProductDto>> GetProductsCall
+@inject ICall<DeleteProduct> DeleteProductCall
+
+<PageTitle>Products - InvoicePro</PageTitle>
+
+<ListPageLayout Title="Products"
+                Description="Manage your product and service catalog for quick invoicing."
+                ActionUrl="products/new"
+                ActionText="Add Product"
+                SearchPlaceholder="Search by name or description..."
+                SearchValue="@_searchTerm"
+                SearchValueChanged="OnSearchChanged"
+                Breadcrumbs="@(new List<PageHeader.BreadcrumbItem> { new("Products") })">
+    <Filters>
+        <select @bind="_showInactive" @bind:after="OnFilterChanged" class="py-3 px-4 text-sm text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-700 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
+            <option value="false">Active products</option>
+            <option value="true">All products</option>
+        </select>
+    </Filters>
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <LoadingGrid Variant="LoadingGrid.LoadingGridVariant.ClientCard" />
+        }
+        else if (_response == null || !_response.Items.Any())
+        {
+            <EmptyState Title="No products found"
+                        Message="@(HasActiveFilters ? "No products match your filters. Try adjusting your search." : "Get started by adding your first product or service.")"
+                        IconType="EmptyState.EmptyStateIcon.Briefcase"
+                        ActionUrl="@(HasActiveFilters ? null : "products/new")"
+                        ActionText="@(HasActiveFilters ? null : "Add Product")" />
+        }
+        else
+        {
+            <CardGrid>
+                @foreach (var product in _response.Items)
+                {
+                    <EntityCard Href="@($"products/{product.Id}/edit")"
+                                Title="@product.Name"
+                                Subtitle="@(product.Category ?? "Uncategorized")"
+                                AvatarText="@product.Name[..1]">
+                        <BadgeTemplate>
+                            @if (product.IsActive)
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-600/20">Active</span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-400 ring-1 ring-inset ring-gray-500/20 dark:ring-slate-500/30">Inactive</span>
+                            }
+                        </BadgeTemplate>
+                        <DetailsTemplate>
+                            <div class="space-y-2.5">
+                                @if (!string.IsNullOrEmpty(product.Description))
+                                {
+                                    <p class="text-sm text-gray-600 dark:text-slate-300 line-clamp-2">@product.Description</p>
+                                }
+                                @if (!string.IsNullOrEmpty(product.Sku))
+                                {
+                                    <div class="flex items-center gap-2 text-sm">
+                                        <span class="text-gray-500 dark:text-slate-400">SKU:</span>
+                                        <span class="text-gray-700 dark:text-slate-300 font-mono">@product.Sku</span>
+                                    </div>
+                                }
+                            </div>
+                        </DetailsTemplate>
+                        <FooterTemplate>
+                            <div class="text-sm">
+                                <span class="text-gray-500 dark:text-slate-400">Price:</span>
+                                <span class="font-semibold text-gray-900 dark:text-slate-100 ml-1">@CurrencyExtensions.GetSymbol(product.Currency)@product.UnitPrice.ToString("N2")</span>
+                            </div>
+                        </FooterTemplate>
+                        <ActionsTemplate>
+                            <IconButton Href="@($"products/{product.Id}/edit")" Title="Edit">
+                                <EditIcon />
+                            </IconButton>
+                            <IconButton OnClick="() => DeleteProductAsync(product)" Variant="IconButton.IconButtonVariant.Danger" Title="Delete">
+                                <DeleteIcon />
+                            </IconButton>
+                        </ActionsTemplate>
+                    </EntityCard>
+                }
+            </CardGrid>
+
+            <Pagination CurrentPage="_response.Page"
+                        TotalItems="_response.TotalCount"
+                        PageSize="_response.PageSize"
+                        ItemName="products"
+                        OnPageChanged="OnPageChanged" />
+        }
+    </ChildContent>
+</ListPageLayout>
+
+@code {
+    private PaginatedResponse<ProductDto>? _response;
+    private bool _isLoading = true;
+    private string _searchTerm = "";
+    private bool _showInactive;
+    private int _currentPage = 1;
+    private const int PageSize = 12;
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(_searchTerm);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+    }
+
+    private async Task LoadProducts()
+    {
+        _isLoading = true;
+        try
+        {
+            _response = await GetProductsCall.Call(new GetProducts
+            {
+                ActiveOnly = !_showInactive,
+                Page = _currentPage,
+                PageSize = PageSize,
+                Search = _searchTerm
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading products: {ex.Message}");
+            _response = new PaginatedResponse<ProductDto>();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        _currentPage = 1;
+        await LoadProducts();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadProducts();
+    }
+
+    private async Task OnSearchChanged(string value)
+    {
+        _searchTerm = value;
+        _currentPage = 1;
+        await LoadProducts();
+    }
+
+    private async Task DeleteProductAsync(ProductDto product)
+    {
+        var confirmed = await ModalService.ShowAsync<bool>(
+            typeof(DeleteConfirmationModal),
+            "Delete Product",
+            new Dictionary<string, object>
+            {
+                { "ItemName", product.Name },
+                { "WarningMessage", "This will deactivate the product. It will no longer appear in product selections." }
+            },
+            new ModalOptions { Size = ModalSize.Small });
+
+        if (!confirmed) return;
+
+        try
+        {
+            await DeleteProductCall.Call(new DeleteProduct { Id = product.Id });
+            await LoadProducts();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting product: {ex.Message}");
+        }
+    }
+}
