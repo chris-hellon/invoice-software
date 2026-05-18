@@ -50,7 +50,8 @@ public class GetBusinessProfileHandler(IDbContextFactory<ApplicationDbContext> d
             profile.PayPalMeUsername,
             profile.WiseEmail,
             profile.RevolutUsername,
-            profile.VietQrBankCode);
+            profile.VietQrBankCode,
+            profile.VndToDefaultCurrencyRate);
 
         return HttpResult<BusinessProfileDto?>.Ok(result);
     }

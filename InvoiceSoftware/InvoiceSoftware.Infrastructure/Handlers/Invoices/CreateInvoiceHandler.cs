@@ -67,6 +67,25 @@ public class CreateInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbFact
             }
         }
 
+        // Create product line items
+        if (request.ProductLineItems.Count > 0)
+        {
+            var order = 0;
+            foreach (var item in request.ProductLineItems)
+            {
+                var lineItem = InvoiceLineItem.Create(
+                    invoice.Id,
+                    item.Description,
+                    item.Quantity,
+                    item.UnitPrice,
+                    currency,
+                    order++,
+                    item.ProductId);
+
+                db.InvoiceLineItems.Add(lineItem);
+            }
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         return HttpResult<Guid>.Created(invoice.Id);
     }

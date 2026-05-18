@@ -42,6 +42,13 @@ public class GetPublicInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbF
             .Where(e => e.InvoiceId == invoice.Id)
             .ToListAsync(cancellationToken);
 
+        // Get product line items for this invoice
+        var productLineItems = await db.InvoiceLineItems
+            .Include(li => li.Product)
+            .Where(li => li.InvoiceId == invoice.Id)
+            .OrderBy(li => li.Order)
+            .ToListAsync(cancellationToken);
+
         // Get business profile (owner of the invoice)
         var businessProfile = await db.BusinessProfiles
             .FirstOrDefaultAsync(b => b.UserId == invoice.CreatedBy, cancellationToken);
@@ -53,7 +60,8 @@ public class GetPublicInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbF
         // Calculate totals (same as in GetInvoiceHandler)
         var timeEntriesSubtotal = timeEntries.Sum(e => RoundToQuarterHour(e.Hours.Value) * e.Job.GetEffectiveHourlyRate());
         var expensesSubtotal = expenses.Sum(e => e.GetTotalAmount());
-        var subtotal = timeEntriesSubtotal + expensesSubtotal;
+        var productsSubtotal = productLineItems.Sum(p => p.LineTotal.Amount);
+        var subtotal = timeEntriesSubtotal + expensesSubtotal + productsSubtotal;
         var taxAmount = subtotal * (invoice.TaxRate / 100);
         var total = subtotal + taxAmount;
 
@@ -91,6 +99,18 @@ public class GetPublicInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbF
             e.GetTotalAmount(),
             e.Amount.Currency,
             e.Project?.Name)).ToList();
+
+        // Build product line items
+        var productLineItemDtos = productLineItems.Select(p => new InvoiceProductLineItemDto(
+            p.Id,
+            p.ProductId,
+            p.Product?.Name,
+            p.Description,
+            p.Quantity,
+            p.UnitPrice.Amount,
+            p.LineTotal.Amount,
+            p.UnitPrice.Currency,
+            p.Order)).ToList();
 
         // Build business address string
         string? businessAddress = null;
@@ -191,6 +211,7 @@ public class GetPublicInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbF
             invoice.Notes,
             lineItems,
             expenseLineItems,
+            productLineItemDtos,
             // Business info
             businessProfile?.TradingName ?? businessProfile?.CompanyName,
             businessAddress,
@@ -199,10 +220,13 @@ public class GetPublicInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbF
             businessProfile?.Logo,
             businessProfile?.TaxNumber,
             businessProfile?.RegistrationNumber,
-            // Payment options (hide PayPal/Wise/Revolut for VND)
-            invoice.Currency != "VND" ? businessProfile?.PayPalMeUsername : null,
-            invoice.Currency != "VND" ? businessProfile?.WiseEmail : null,
-            invoice.Currency != "VND" ? businessProfile?.RevolutUsername : null,
+            // Payment options
+            businessProfile?.PayPalMeUsername,
+            businessProfile?.WiseEmail,
+            businessProfile?.RevolutUsername,
+            // VND conversion settings
+            businessProfile?.DefaultCurrency,
+            businessProfile?.VndToDefaultCurrencyRate,
             currencyPaymentDto,
             templateDto);
 

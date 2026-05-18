@@ -1,4 +1,5 @@
 using BlazorUtils.EasyApi;
+using InvoiceSoftware.Shared.Dtos.Invoices;
 
 namespace InvoiceSoftware.Shared.Api.Invoices;
 
@@ -31,4 +32,7 @@ public class UpdateInvoice : IPut
 
     [BodyParam]
     public List<Guid>? RemovedExpenseIds { get; init; }
+
+    [BodyParam]
+    public List<ProductLineItemRequest>? ProductLineItems { get; init; }
 }

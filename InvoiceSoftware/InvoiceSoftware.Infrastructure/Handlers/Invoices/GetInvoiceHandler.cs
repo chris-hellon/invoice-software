@@ -37,7 +37,13 @@ public class GetInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbFactory
             .Where(e => e.InvoiceId == request.Id)
             .ToListAsync(cancellationToken);
 
-        var (subtotal, taxAmount, total) = CalculateInvoiceTotals(timeEntries, expenses, invoice.TaxRate);
+        var productLineItems = await db.InvoiceLineItems
+            .Include(li => li.Product)
+            .Where(li => li.InvoiceId == request.Id)
+            .OrderBy(li => li.Order)
+            .ToListAsync(cancellationToken);
+
+        var (subtotal, taxAmount, total) = CalculateInvoiceTotals(timeEntries, expenses, productLineItems, invoice.TaxRate);
 
         var clientAddress = invoice.Client.BillingAddress != null
             ? $"{invoice.Client.BillingAddress.Street1}, {invoice.Client.BillingAddress.City}, {invoice.Client.BillingAddress.State} {invoice.Client.BillingAddress.PostalCode}"
@@ -90,6 +96,17 @@ public class GetInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbFactory
                 e.Project?.Name);
         }).ToList();
 
+        var productLineItemDtos = productLineItems.Select(li => new InvoiceProductLineItemDto(
+            li.Id,
+            li.ProductId,
+            li.Product?.Name,
+            li.Description,
+            li.Quantity,
+            li.UnitPrice.Amount,
+            li.LineTotal.Amount,
+            li.UnitPrice.Currency,
+            li.Order)).ToList();
+
         // Map template to DTO if present
         InvoiceTemplateDto? templateDto = null;
         if (invoice.Template != null)
@@ -137,6 +154,7 @@ public class GetInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbFactory
             invoice.Notes,
             lineItems,
             expenseLineItems,
+            productLineItemDtos,
             invoice.PublicAccessToken,
             invoice.TemplateId,
             templateDto);
@@ -145,11 +163,12 @@ public class GetInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbFactory
     }
 
     private static (decimal Subtotal, decimal TaxAmount, decimal Total) CalculateInvoiceTotals(
-        List<TimeEntry> timeEntries, List<Expense> expenses, decimal taxRate)
+        List<TimeEntry> timeEntries, List<Expense> expenses, List<InvoiceLineItem> productLineItems, decimal taxRate)
     {
         var timeSubtotal = timeEntries.Sum(e => RoundToQuarterHour(e.Hours.Value) * e.Job.GetEffectiveHourlyRate());
         var expenseSubtotal = expenses.Sum(e => e.GetTotalAmount());
-        var subtotal = timeSubtotal + expenseSubtotal;
+        var productSubtotal = productLineItems.Sum(li => li.LineTotal.Amount);
+        var subtotal = timeSubtotal + expenseSubtotal + productSubtotal;
         var taxAmount = subtotal * (taxRate / 100);
         var total = subtotal + taxAmount;
         return (subtotal, taxAmount, total);

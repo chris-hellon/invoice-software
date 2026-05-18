@@ -41,6 +41,12 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             .HasForeignKey(te => te.InvoiceId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Invoice has many product LineItems
+        builder.HasMany(i => i.LineItems)
+            .WithOne(li => li.Invoice)
+            .HasForeignKey(li => li.InvoiceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasIndex(i => i.ClientId);
         builder.HasIndex(i => i.Status);
     }

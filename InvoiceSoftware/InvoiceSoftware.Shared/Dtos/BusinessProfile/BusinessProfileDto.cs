@@ -30,4 +30,5 @@ public record BusinessProfileDto(
     string? PayPalMeUsername,
     string? WiseEmail,
     string? RevolutUsername,
-    string? VietQrBankCode);
+    string? VietQrBankCode,
+    decimal? VndToDefaultCurrencyRate);

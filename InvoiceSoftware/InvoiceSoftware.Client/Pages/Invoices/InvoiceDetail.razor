@@ -108,6 +108,7 @@
                         Notes="@_invoice.Notes"
                         LineItems="@_invoice.LineItems"
                         ExpenseLineItems="@_invoice.ExpenseLineItems"
+                        ProductLineItems="@_invoice.ProductLineItems"
                         PrimaryColor="@PrimaryColor"
                         AccentColor="@AccentColor"
                         ShowLogo="@ShowLogo"
@@ -118,6 +119,8 @@
                         PayPalMeUsername="@_businessProfile?.PayPalMeUsername"
                         WiseEmail="@_businessProfile?.WiseEmail"
                         RevolutUsername="@_businessProfile?.RevolutUsername"
+                        DefaultCurrency="@_businessProfile?.DefaultCurrency"
+                        VndToDefaultCurrencyRate="@_businessProfile?.VndToDefaultCurrencyRate"
                         CurrencyPaymentSettings="@_currencyPaymentSettings" />
                 </div>
             </div>

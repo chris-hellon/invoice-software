@@ -22,6 +22,7 @@ public record PublicInvoiceDto(
     string? Notes,
     List<InvoiceLineItemDto> LineItems,
     List<InvoiceExpenseLineItemDto> ExpenseLineItems,
+    List<InvoiceProductLineItemDto> ProductLineItems,
     // Business profile info for display
     string? BusinessName,
     string? BusinessAddress,
@@ -34,6 +35,9 @@ public record PublicInvoiceDto(
     string? PayPalMeUsername,
     string? WiseEmail,
     string? RevolutUsername,
+    // VND conversion settings
+    string? DefaultCurrency,
+    decimal? VndToDefaultCurrencyRate,
     // Currency-specific bank details
     CurrencyPaymentSettingsDto? CurrencyPaymentSettings,
     // Template styling

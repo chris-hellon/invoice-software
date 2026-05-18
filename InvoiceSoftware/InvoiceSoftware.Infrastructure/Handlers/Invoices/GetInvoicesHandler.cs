@@ -57,7 +57,11 @@ public class GetInvoicesHandler(IDbContextFactory<ApplicationDbContext> dbFactor
                 .Where(e => e.InvoiceId == invoice.Id)
                 .ToListAsync(cancellationToken);
 
-            var (subtotal, taxAmount, total) = CalculateInvoiceTotals(timeEntries, expenses, invoice.TaxRate);
+            var productLineItems = await db.InvoiceLineItems
+                .Where(li => li.InvoiceId == invoice.Id)
+                .ToListAsync(cancellationToken);
+
+            var (subtotal, taxAmount, total) = CalculateInvoiceTotals(timeEntries, expenses, productLineItems, invoice.TaxRate);
 
             items.Add(new InvoiceSummaryDto(
                 invoice.Id,
@@ -85,11 +89,12 @@ public class GetInvoicesHandler(IDbContextFactory<ApplicationDbContext> dbFactor
     }
 
     private static (decimal Subtotal, decimal TaxAmount, decimal Total) CalculateInvoiceTotals(
-        List<TimeEntry> timeEntries, List<Expense> expenses, decimal taxRate)
+        List<TimeEntry> timeEntries, List<Expense> expenses, List<InvoiceLineItem> productLineItems, decimal taxRate)
     {
         var timeSubtotal = timeEntries.Sum(e => RoundToQuarterHour(e.Hours.Value) * e.Job.GetEffectiveHourlyRate());
         var expenseSubtotal = expenses.Sum(e => e.GetTotalAmount());
-        var subtotal = timeSubtotal + expenseSubtotal;
+        var productSubtotal = productLineItems.Sum(p => p.LineTotal.Amount);
+        var subtotal = timeSubtotal + expenseSubtotal + productSubtotal;
         var taxAmount = subtotal * (taxRate / 100);
         var total = subtotal + taxAmount;
         return (subtotal, taxAmount, total);

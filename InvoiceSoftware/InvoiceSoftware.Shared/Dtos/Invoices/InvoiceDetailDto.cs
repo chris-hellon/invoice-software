@@ -22,6 +22,7 @@ public record InvoiceDetailDto(
     string? Notes,
     List<InvoiceLineItemDto> LineItems,
     List<InvoiceExpenseLineItemDto> ExpenseLineItems,
+    List<InvoiceProductLineItemDto> ProductLineItems,
     Guid? PublicAccessToken = null,
     Guid? TemplateId = null,
     InvoiceTemplateDto? Template = null);

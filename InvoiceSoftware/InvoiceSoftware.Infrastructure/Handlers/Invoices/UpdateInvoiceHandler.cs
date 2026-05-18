@@ -1,5 +1,6 @@
 using BlazorUtils.EasyApi;
 using BlazorUtils.EasyApi.Server;
+using InvoiceSoftware.Domain.Entities;
 using InvoiceSoftware.Infrastructure.Data;
 using InvoiceSoftware.Shared.Api.Invoices;
 using Microsoft.EntityFrameworkCore;
@@ -61,6 +62,31 @@ public class UpdateInvoiceHandler(IDbContextFactory<ApplicationDbContext> dbFact
             foreach (var expense in toLink)
             {
                 expense.MarkAsBilled(request.Id);
+            }
+        }
+
+        // Update product line items - replace all
+        if (request.ProductLineItems != null)
+        {
+            // Remove existing product line items
+            var existingLineItems = await db.InvoiceLineItems
+                .Where(li => li.InvoiceId == request.Id)
+                .ToListAsync(cancellationToken);
+            db.InvoiceLineItems.RemoveRange(existingLineItems);
+
+            // Add new product line items
+            var order = 0;
+            foreach (var item in request.ProductLineItems)
+            {
+                var lineItem = InvoiceLineItem.Create(
+                    request.Id,
+                    item.Description,
+                    item.Quantity,
+                    item.UnitPrice,
+                    invoice.Currency,
+                    order++,
+                    item.ProductId);
+                db.InvoiceLineItems.Add(lineItem);
             }
         }
 

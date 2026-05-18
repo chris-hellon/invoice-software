@@ -3,6 +3,7 @@
 @inject ICall<GetClients, PaginatedResponse<ClientDto>> GetClientsCall
 @inject ICall<GetUnbilledTimeEntries, List<UnbilledTimeEntryDto>> GetUnbilledTimeEntriesCall
 @inject ICall<GetUnbilledExpenses, List<ExpenseSummaryDto>> GetUnbilledExpensesCall
+@inject ICall<GetProducts, PaginatedResponse<ProductDto>> GetProductsCall
 @inject ICall<CreateInvoice, Guid> CreateInvoiceCall
 @inject ICall<GetInvoiceTemplates, List<InvoiceTemplateDto>> GetInvoiceTemplatesCall
 
@@ -120,6 +121,27 @@
                                  SelectedExpenseIdsChanged="OnExpenseSelectionChanged" />
             </div>
 
+            <!-- Step 2c: Add Products -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-700/50">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                        </div>
+                        <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Add Products</h2>
+                        <span class="text-xs text-gray-500 dark:text-slate-400">(Optional)</span>
+                    </div>
+                </div>
+
+                <ProductSelector Products="_availableProducts"
+                                 Currency="@ClientCurrency"
+                                 IsLoading="_isLoadingProducts"
+                                 LineItems="_productLineItems"
+                                 LineItemsChanged="OnProductLineItemsChanged" />
+            </div>
+
             @if (HasSelectedItems)
             {
                 <!-- Step 3: Invoice Details -->
@@ -198,6 +220,13 @@
                                     <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(ClientCurrency)@ExpenseSubtotal.ToString("N2")</dd>
                                 </div>
                             }
+                            @if (ValidProductLineItems.Any())
+                            {
+                                <div class="flex justify-between items-center">
+                                    <dt class="text-sm text-gray-600 dark:text-slate-400">Products (@ValidProductLineItems.Count())</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(ClientCurrency)@ProductSubtotal.ToString("N2")</dd>
+                                </div>
+                            }
                             <div class="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-slate-700">
                                 <dt class="text-sm text-gray-600 dark:text-slate-400">Subtotal</dt>
                                 <dd class="text-sm font-medium text-gray-900 dark:text-slate-100">@CurrencyExtensions.GetSymbol(ClientCurrency)@Subtotal.ToString("N2")</dd>
@@ -258,9 +287,11 @@
     private List<ClientDto>? _clients;
     private List<UnbilledTimeEntryDto>? _allUnbilledEntries;
     private List<ExpenseSummaryDto>? _allUnbilledExpenses;
+    private List<ProductDto>? _availableProducts;
     private List<InvoiceTemplateDto>? _templates;
     private HashSet<Guid> _selectedEntries = [];
     private HashSet<Guid> _selectedExpenses = [];
+    private List<ProductSelector.ProductLineItemModel> _productLineItems = [];
     private string _selectedClientId = "";
     private string _selectedTemplateId = "";
     private DateOnly _issueDate = DateOnly.FromDateTime(DateTime.Today);
@@ -270,13 +301,17 @@
     private bool _isLoading = true;
     private bool _isLoadingEntries;
     private bool _isLoadingExpenses;
+    private bool _isLoadingProducts;
     private bool _isCreating;
     private string? _errorMessage;
 
     private string ClientCurrency =>
         _clients?.FirstOrDefault(c => c.Id.ToString() == _selectedClientId)?.Currency ?? "USD";
 
-    private bool HasSelectedItems => _selectedEntries.Any() || _selectedExpenses.Any();
+    private bool HasSelectedItems => _selectedEntries.Any() || _selectedExpenses.Any() || ValidProductLineItems.Any();
+
+    private IEnumerable<ProductSelector.ProductLineItemModel> ValidProductLineItems =>
+        _productLineItems.Where(li => !string.IsNullOrEmpty(li.Description));
 
     private int CurrentStep => string.IsNullOrEmpty(_selectedClientId) ? 1 : HasSelectedItems ? 3 : 2;
 
@@ -288,7 +323,9 @@
         ? _allUnbilledExpenses.Where(e => _selectedExpenses.Contains(e.Id)).Sum(e => e.Amount + e.TaxAmount)
         : 0;
 
-    private decimal Subtotal => TimeSubtotal + ExpenseSubtotal;
+    private decimal ProductSubtotal => ValidProductLineItems.Sum(li => li.Quantity * li.UnitPrice);
+
+    private decimal Subtotal => TimeSubtotal + ExpenseSubtotal + ProductSubtotal;
 
     private decimal TaxAmount => Subtotal * (_taxRate / 100);
 
@@ -298,11 +335,16 @@
     {
         try
         {
-            var clientsResponse = await GetClientsCall.Call(new GetClients { PageSize = 1000 });
-            _clients = clientsResponse?.Items ?? [];
+            // Load clients, products, and templates in parallel
+            var clientsTask = GetClientsCall.Call(new GetClients { PageSize = 1000 });
+            var productsTask = GetProductsCall.Call(new GetProducts { ActiveOnly = true, PageSize = 1000 });
+            var templatesTask = GetInvoiceTemplatesCall.Call(new GetInvoiceTemplates { IncludeSystem = true });
 
-            // Load templates
-            _templates = await GetInvoiceTemplatesCall.Call(new GetInvoiceTemplates { IncludeSystem = true });
+            await Task.WhenAll(clientsTask, productsTask, templatesTask);
+
+            _clients = (await clientsTask)?.Items ?? [];
+            _availableProducts = (await productsTask)?.Items?.ToList() ?? [];
+            _templates = await templatesTask ?? [];
 
             // Pre-select default template if available
             var defaultTemplate = _templates?.FirstOrDefault(t => t.IsDefault);
@@ -315,6 +357,7 @@
         {
             Console.WriteLine($"Error loading data: {ex.Message}");
             _clients = [];
+            _availableProducts = [];
             _templates = [];
         }
         finally
@@ -331,6 +374,7 @@
             _allUnbilledExpenses = null;
             _selectedEntries.Clear();
             _selectedExpenses.Clear();
+            _productLineItems.Clear();
             return;
         }
 
@@ -338,6 +382,7 @@
         _isLoadingExpenses = true;
         _selectedEntries.Clear();
         _selectedExpenses.Clear();
+        _productLineItems.Clear();
 
         var clientId = Guid.Parse(_selectedClientId);
 
@@ -386,6 +431,12 @@
         StateHasChanged();
     }
 
+    private void OnProductLineItemsChanged(List<ProductSelector.ProductLineItemModel> lineItems)
+    {
+        _productLineItems = lineItems;
+        StateHasChanged();
+    }
+
     private async Task CreateInvoice()
     {
         _isCreating = true;
@@ -393,11 +444,20 @@
 
         try
         {
+            var productLineItems = ValidProductLineItems
+                .Select(li => new ProductLineItemRequest(
+                    li.ProductId,
+                    li.Description,
+                    li.Quantity,
+                    li.UnitPrice))
+                .ToList();
+
             await CreateInvoiceCall.Call(new CreateInvoice
             {
                 ClientId = Guid.Parse(_selectedClientId),
                 TimeEntryIds = _selectedEntries.ToList(),
                 ExpenseIds = _selectedExpenses.ToList(),
+                ProductLineItems = productLineItems,
                 IssueDate = _issueDate,
                 DueDate = _dueDate,
                 TaxRate = _taxRate,

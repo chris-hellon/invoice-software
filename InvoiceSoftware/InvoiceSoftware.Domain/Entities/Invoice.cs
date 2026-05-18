@@ -25,6 +25,10 @@ public class Invoice : AggregateRoot, IAuditableEntity
     private readonly List<TimeEntry> _timeEntries = [];
     public IReadOnlyCollection<TimeEntry> TimeEntries => _timeEntries.AsReadOnly();
 
+    // Product line items for direct product billing
+    private readonly List<InvoiceLineItem> _lineItems = [];
+    public IReadOnlyCollection<InvoiceLineItem> LineItems => _lineItems.AsReadOnly();
+
     public DateTime CreatedAt { get; set; }
     public string CreatedBy { get; set; } = null!;
     public DateTime? ModifiedAt { get; set; }
@@ -110,5 +114,28 @@ public class Invoice : AggregateRoot, IAuditableEntity
             throw new DomainException("Cannot void a paid invoice");
 
         Status = InvoiceStatus.Void;
+    }
+
+    public void AddLineItem(InvoiceLineItem lineItem)
+    {
+        if (Status != InvoiceStatus.Draft)
+            throw new DomainException("Cannot modify a non-draft invoice");
+        _lineItems.Add(lineItem);
+    }
+
+    public void RemoveLineItem(Guid lineItemId)
+    {
+        if (Status != InvoiceStatus.Draft)
+            throw new DomainException("Cannot modify a non-draft invoice");
+        var item = _lineItems.FirstOrDefault(li => li.Id == lineItemId);
+        if (item != null)
+            _lineItems.Remove(item);
+    }
+
+    public void ClearLineItems()
+    {
+        if (Status != InvoiceStatus.Draft)
+            throw new DomainException("Cannot modify a non-draft invoice");
+        _lineItems.Clear();
     }
 }

@@ -89,6 +89,9 @@ public class BusinessProfileConfiguration : IEntityTypeConfiguration<BusinessPro
         builder.Property(bp => bp.DefaultPaymentTermsDays)
             .HasDefaultValue(30);
 
+        builder.Property(bp => bp.VndToDefaultCurrencyRate)
+            .HasPrecision(18, 8);
+
         builder.Property(bp => bp.InvoiceNotes)
             .HasMaxLength(2000);
 

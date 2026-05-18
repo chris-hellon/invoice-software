@@ -3,7 +3,9 @@
 @inject ICall<GetInvoice, InvoiceDetailDto> GetInvoiceCall
 @inject ICall<GetUnbilledTimeEntries, List<UnbilledTimeEntryDto>> GetUnbilledTimeEntriesCall
 @inject ICall<GetUnbilledExpenses, List<ExpenseSummaryDto>> GetUnbilledExpensesCall
+@inject ICall<GetProducts, PaginatedResponse<ProductDto>> GetProductsCall
 @inject ICall<UpdateInvoice> UpdateInvoiceCall
+@inject NavigationManager NavigationManager
 
 <PageTitle>Edit Invoice - InvoicePro</PageTitle>
 
@@ -224,6 +226,26 @@
                              SelectedExpenseIdsChanged="OnExpenseSelectionChanged" />
         </div>
 
+        <!-- Products Section -->
+        <div class="bg-white dark:bg-[#1a1827] rounded-2xl border border-gray-100 dark:border-[#2d2a4a] overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-[#2d2a4a] bg-gray-50/50 dark:bg-[#1a1827]/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);">
+                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                    </div>
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">Products</h2>
+                </div>
+            </div>
+
+            <ProductSelector Products="_availableProducts"
+                             Currency="@_currency"
+                             IsLoading="_isLoadingProducts"
+                             LineItems="_productLineItems"
+                             LineItemsChanged="OnProductLineItemsChanged" />
+        </div>
+
         <!-- Summary -->
         <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
@@ -247,6 +269,13 @@
                         <div class="flex justify-between items-center text-amber-600">
                             <dt class="text-sm">+ New expenses (@_selectedExpenseIds.Count)</dt>
                             <dd class="text-sm font-medium">+@CurrencyExtensions.GetSymbol(_currency)@SelectedExpensesTotal.ToString("N2")</dd>
+                        </div>
+                    }
+                    @if (_productLineItems.Any())
+                    {
+                        <div class="flex justify-between items-center text-blue-600">
+                            <dt class="text-sm">Products (@_productLineItems.Count)</dt>
+                            <dd class="text-sm font-medium">@CurrencyExtensions.GetSymbol(_currency)@ProductsTotal.ToString("N2")</dd>
                         </div>
                     }
                     <div class="flex justify-between items-center pt-2 border-t border-gray-100">
@@ -329,13 +358,18 @@
     private HashSet<Guid> _selectedExpenseIds = [];
     private bool _isLoadingExpenses;
 
+    private List<ProductDto>? _availableProducts;
+    private List<ProductSelector.ProductLineItemModel> _productLineItems = [];
+    private bool _isLoadingProducts;
+
     private decimal CurrentSubtotal => _lineItems.Sum(li => li.LineTotal);
     private decimal SelectedEntriesTotal => _allUnbilledEntries != null ? _allUnbilledEntries.Where(e => _selectedEntryIds.Contains(e.Id))
         .Sum(e => e.Hours * e.HourlyRate) : 0;
     private decimal SelectedExpensesTotal => _allUnbilledExpenses != null ? _allUnbilledExpenses.Where(e => _selectedExpenseIds.Contains(e.Id))
         .Sum(e => e.Amount + e.TaxAmount) : 0;
+    private decimal ProductsTotal => _productLineItems.Sum(p => p.Quantity * p.UnitPrice);
 
-    private decimal Subtotal => CurrentSubtotal + SelectedEntriesTotal + SelectedExpensesTotal;
+    private decimal Subtotal => CurrentSubtotal + SelectedEntriesTotal + SelectedExpensesTotal + ProductsTotal;
     private decimal TaxAmount => Subtotal * (_taxRate / 100);
     private decimal Total => Subtotal + TaxAmount;
 
@@ -373,8 +407,20 @@
                     Currency = li.Currency
                 }).ToList();
 
+                // Load existing product line items
+                _productLineItems = _invoice.ProductLineItems.Select(p => new ProductSelector.ProductLineItemModel
+                {
+                    ProductId = p.ProductId,
+                    Description = p.Description,
+                    Quantity = p.Quantity,
+                    UnitPrice = p.UnitPrice
+                }).ToList();
+
                 // Load unbilled time entries for this client
                 await LoadUnbilledEntries();
+
+                // Load available products
+                await LoadProducts();
             }
         }
         catch (Exception ex)
@@ -438,6 +484,34 @@
         StateHasChanged();
     }
 
+    private async Task LoadProducts()
+    {
+        _isLoadingProducts = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await GetProductsCall.Call(new GetProducts { PageSize = 1000 });
+            _availableProducts = response?.Items?.ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading products: {ex.Message}");
+            _availableProducts = [];
+        }
+        finally
+        {
+            _isLoadingProducts = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnProductLineItemsChanged(List<ProductSelector.ProductLineItemModel> newLineItems)
+    {
+        _productLineItems = newLineItems;
+        StateHasChanged();
+    }
+
     private void RemoveLineItem(EditableLineItem item)
     {
         _lineItems.Remove(item);
@@ -463,13 +537,14 @@
 
     private async Task SaveChanges()
     {
-        // Validate - must have at least one item (existing time entries, existing expenses, new time entries, or new expenses)
+        // Validate - must have at least one item (existing time entries, existing expenses, new time entries, new expenses, or products)
         var hasExistingTimeEntries = _lineItems.Count > 0;
         var hasExistingExpenses = _invoice?.ExpenseLineItems?.Count > 0;
         var hasNewTimeEntries = _selectedEntryIds.Count > 0;
         var hasNewExpenses = _selectedExpenseIds.Count > 0;
+        var hasProducts = _productLineItems.Count > 0;
 
-        if (!hasExistingTimeEntries && !hasExistingExpenses && !hasNewTimeEntries && !hasNewExpenses)
+        if (!hasExistingTimeEntries && !hasExistingExpenses && !hasNewTimeEntries && !hasNewExpenses && !hasProducts)
         {
             _errorMessage = "Invoice must have at least one line item.";
             return;
@@ -489,7 +564,11 @@
                 Notes = _notes,
                 AddedTimeEntryIds = _selectedEntryIds.Count > 0 ? _selectedEntryIds.ToList() : null,
                 RemovedTimeEntryIds = _removedLineItemIds.Count > 0 ? _removedLineItemIds : null,
-                AddedExpenseIds = _selectedExpenseIds.Count > 0 ? _selectedExpenseIds.ToList() : null
+                AddedExpenseIds = _selectedExpenseIds.Count > 0 ? _selectedExpenseIds.ToList() : null,
+                ProductLineItems = _productLineItems
+                    .Where(p => !string.IsNullOrWhiteSpace(p.Description) || p.ProductId.HasValue)
+                    .Select(p => new ProductLineItemRequest(p.ProductId, p.Description, p.Quantity, p.UnitPrice))
+                    .ToList()
             };
 
             await UpdateInvoiceCall.Call(request);

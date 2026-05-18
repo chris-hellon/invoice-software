@@ -43,6 +43,9 @@ public class BusinessProfile : AggregateRoot, IAuditableEntity
     public string? RevolutUsername { get; private set; }
     public string? VietQrBankCode { get; private set; }
 
+    // Currency Conversion for VND invoices
+    public decimal? VndToDefaultCurrencyRate { get; private set; }
+
     public DateTime CreatedAt { get; set; }
     public string CreatedBy { get; set; } = null!;
     public DateTime? ModifiedAt { get; set; }
@@ -87,7 +90,8 @@ public class BusinessProfile : AggregateRoot, IAuditableEntity
         string? payPalMeUsername,
         string? wiseEmail,
         string? revolutUsername,
-        string? vietQrBankCode)
+        string? vietQrBankCode,
+        decimal? vndToDefaultCurrencyRate = null)
     {
         CompanyName = companyName;
         TradingName = tradingName;
@@ -113,6 +117,7 @@ public class BusinessProfile : AggregateRoot, IAuditableEntity
         WiseEmail = wiseEmail;
         RevolutUsername = revolutUsername;
         VietQrBankCode = vietQrBankCode;
+        VndToDefaultCurrencyRate = vndToDefaultCurrencyRate;
     }
 
     public void UpdateLogo(byte[]? logo, string? contentType)

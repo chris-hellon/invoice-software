@@ -316,6 +316,57 @@ else if (Status == "Void")
     </div>
 }
 
+<!-- Products Section -->
+@if (ProductLineItems?.Any() == true)
+{
+    <div class="px-8 py-3 border-b bg-blue-50 border-blue-300/30">
+        <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            <span class="text-xs font-semibold uppercase tracking-wider text-blue-600">Products</span>
+        </div>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="bg-gray-50/50 dark:bg-slate-800/30 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">
+                    <th class="px-8 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">Description</th>
+                    <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">Qty</th>
+                    <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">Price</th>
+                    <th class="px-8 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">Amount</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                @{
+                    var productIndex = 0;
+                }
+                @foreach (var product in ProductLineItems)
+                {
+                    var rowClass = ItemsLayout switch
+                    {
+                        "striped" => productIndex % 2 == 0 ? "bg-gray-50/50 dark:bg-slate-800/30" : "",
+                        _ => "hover:bg-gray-50/50 dark:hover:bg-slate-700/30 transition-colors"
+                    };
+                    <tr class="@rowClass">
+                        <td class="px-8 py-5 @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">@product.Description</div>
+                            @if (ShowItemDescriptions && !string.IsNullOrEmpty(product.ProductName))
+                            {
+                                <div class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">@product.ProductName</div>
+                            }
+                        </td>
+                        <td class="px-6 py-5 text-sm text-gray-700 dark:text-slate-300 text-center @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">@product.Quantity.ToString("N2")</td>
+                        <td class="px-6 py-5 text-sm text-gray-600 dark:text-slate-400 text-right @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">@CurrencyExtensions.GetSymbol(Currency)@product.UnitPrice.ToString("N2")</td>
+                        <td class="px-8 py-5 text-sm font-semibold text-gray-900 dark:text-white text-right @(ItemsLayout == "bordered" ? "border border-gray-200 dark:border-slate-600" : "")">@CurrencyExtensions.GetSymbol(Currency)@product.LineTotal.ToString("N2")</td>
+                    </tr>
+                    productIndex++;
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
 <!-- Totals Section -->
 <div class="p-8 border-t border-gray-100 dark:border-slate-700 bg-gray-50/30 dark:bg-slate-800/20">
     <div class="flex justify-end">
@@ -374,8 +425,8 @@ else if (Status == "Void")
     <div class="px-8 py-6 border-t border-gray-100 dark:border-slate-700 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-blue-900/20 dark:to-indigo-900/20">
         <div class="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-4">Payment Options</div>
 
-        @* PayPal, Wise, and Revolut buttons - not shown for VND *@
-        @if (Currency != "VND" && (!string.IsNullOrEmpty(PayPalMeUsername) || !string.IsNullOrEmpty(WiseEmail) || !string.IsNullOrEmpty(RevolutUsername)))
+        @* PayPal, Wise, and Revolut buttons - shown for VND if conversion rate is set *@
+        @if ((Currency != "VND" || VndToDefaultCurrencyRate.HasValue) && (!string.IsNullOrEmpty(PayPalMeUsername) || !string.IsNullOrEmpty(WiseEmail) || !string.IsNullOrEmpty(RevolutUsername)))
         {
             <div class="flex flex-wrap gap-4">
                 @if (!string.IsNullOrEmpty(PayPalMeUsername))
@@ -387,7 +438,7 @@ else if (Status == "Void")
                         </svg>
                         <div class="text-left">
                             <div class="text-sm font-semibold">Pay with PayPal</div>
-                            <div class="text-xs opacity-80">@CurrencyExtensions.GetSymbol(Currency)@Total.ToString("N2")</div>
+                            <div class="text-xs opacity-80">@GetPaymentDisplayText()</div>
                         </div>
                         <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -403,7 +454,7 @@ else if (Status == "Void")
                         </svg>
                         <div class="text-left">
                             <div class="text-sm font-semibold">Pay with Wise</div>
-                            <div class="text-xs opacity-70">@CurrencyExtensions.GetSymbol(Currency)@Total.ToString("N2")</div>
+                            <div class="text-xs opacity-70">@GetPaymentDisplayText()</div>
                         </div>
                         <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -419,7 +470,7 @@ else if (Status == "Void")
                         </svg>
                         <div class="text-left">
                             <div class="text-sm font-semibold">Pay with Revolut</div>
-                            <div class="text-xs opacity-80">@CurrencyExtensions.GetSymbol(Currency)@Total.ToString("N2")</div>
+                            <div class="text-xs opacity-80">@GetPaymentDisplayText()</div>
                         </div>
                         <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -432,7 +483,7 @@ else if (Status == "Void")
         @* VietQR section - only for VND *@
         @if (HasVietQr())
         {
-            <div class="@(Currency != "VND" && (!string.IsNullOrEmpty(PayPalMeUsername) || !string.IsNullOrEmpty(WiseEmail) || !string.IsNullOrEmpty(RevolutUsername)) ? "mt-6 pt-6 border-t border-gray-200 dark:border-slate-600" : "")">
+            <div class="@(HasOnlinePaymentButtons() ? "mt-6 pt-6 border-t border-gray-200 dark:border-slate-600" : "")">
                 <div class="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-3">Vietnamese Bank Transfer (VietQR)</div>
                 <div class="flex flex-col sm:flex-row items-start gap-4">
                     <div class="bg-white p-2 rounded-lg shadow-sm border border-gray-100">
@@ -488,7 +539,7 @@ else if (Status == "Void")
         @* Bank transfer details for non-VND currencies *@
         else if (HasBankTransferDetails())
         {
-            <div class="@(Currency != "VND" && (!string.IsNullOrEmpty(PayPalMeUsername) || !string.IsNullOrEmpty(WiseEmail) || !string.IsNullOrEmpty(RevolutUsername)) ? "mt-6 pt-6 border-t border-gray-200 dark:border-slate-600" : "")">
+            <div class="@(HasOnlinePaymentButtons() ? "mt-6 pt-6 border-t border-gray-200 dark:border-slate-600" : "")">
                 <div class="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-3">Bank Transfer</div>
                 <div class="bg-white dark:bg-slate-800 rounded-lg border border-gray-100 dark:border-slate-700 p-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -586,6 +637,11 @@ else if (Status == "Void")
     // Line items
     [Parameter] public List<InvoiceLineItemDto>? LineItems { get; set; }
     [Parameter] public List<InvoiceExpenseLineItemDto>? ExpenseLineItems { get; set; }
+    [Parameter] public List<InvoiceProductLineItemDto>? ProductLineItems { get; set; }
+
+    // VND Conversion
+    [Parameter] public string? DefaultCurrency { get; set; }
+    [Parameter] public decimal? VndToDefaultCurrencyRate { get; set; }
 
     // Template settings
     [Parameter] public string PrimaryColor { get; set; } = "#4f46e5";
@@ -603,16 +659,18 @@ else if (Status == "Void")
     [Parameter] public CurrencyPaymentSettingsDto? CurrencyPaymentSettings { get; set; }
 
     // Payment helper methods
+    private bool HasOnlinePaymentButtons()
+    {
+        var hasOnlinePayments = !string.IsNullOrEmpty(PayPalMeUsername) ||
+                                !string.IsNullOrEmpty(WiseEmail) ||
+                                !string.IsNullOrEmpty(RevolutUsername);
+        // Show for non-VND, or VND with conversion rate set
+        return hasOnlinePayments && (Currency != "VND" || VndToDefaultCurrencyRate.HasValue);
+    }
+
     private bool HasPaymentOptions()
     {
-        if (Currency == "VND")
-        {
-            return HasVietQr() || HasBankTransferDetails();
-        }
-        return !string.IsNullOrEmpty(PayPalMeUsername) ||
-               !string.IsNullOrEmpty(WiseEmail) ||
-               !string.IsNullOrEmpty(RevolutUsername) ||
-               HasBankTransferDetails();
+        return HasOnlinePaymentButtons() || HasVietQr() || HasBankTransferDetails();
     }
 
     private bool HasVietQr()
@@ -642,12 +700,41 @@ else if (Status == "Void")
         return $"https://img.vietqr.io/image/{bankId}-{accountNo}-compact.png?amount={amount}&addInfo={description}&accountName={accountName}";
     }
 
+    private decimal GetPaymentAmount()
+    {
+        if (Currency == "VND" && VndToDefaultCurrencyRate.HasValue && VndToDefaultCurrencyRate.Value > 0)
+        {
+            return Math.Round(Total / VndToDefaultCurrencyRate.Value, 2);
+        }
+        return Total;
+    }
+
+    private string GetPaymentCurrency()
+    {
+        if (Currency == "VND" && VndToDefaultCurrencyRate.HasValue)
+        {
+            return DefaultCurrency ?? "USD";
+        }
+        return Currency;
+    }
+
+    private string GetPaymentDisplayText()
+    {
+        if (Currency == "VND" && VndToDefaultCurrencyRate.HasValue)
+        {
+            var convertedAmount = GetPaymentAmount();
+            var paymentCurrency = GetPaymentCurrency();
+            return $"{CurrencyExtensions.GetSymbol(paymentCurrency)}{convertedAmount:N2} ({paymentCurrency})";
+        }
+        return $"{CurrencyExtensions.GetSymbol(Currency)}{Total:N2}";
+    }
+
     private string GetPayPalLink()
     {
         if (string.IsNullOrEmpty(PayPalMeUsername))
             return "#";
 
-        var amount = Total.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+        var amount = GetPaymentAmount().ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
         return $"https://paypal.me/{PayPalMeUsername}/{amount}";
     }
 
@@ -656,9 +743,10 @@ else if (Status == "Void")
         if (string.IsNullOrEmpty(WiseEmail))
             return "#";
 
-        var amount = Total.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+        var amount = GetPaymentAmount().ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
         var email = Uri.EscapeDataString(WiseEmail);
-        return $"https://wise.com/pay/me?email={email}&amount={amount}&currency={Currency}";
+        var currency = GetPaymentCurrency();
+        return $"https://wise.com/pay/me?email={email}&amount={amount}&currency={currency}";
     }
 
     private string GetRevolutLink()
@@ -666,7 +754,9 @@ else if (Status == "Void")
         if (string.IsNullOrEmpty(RevolutUsername))
             return "#";
 
-        var amountInSmallestUnit = (long)(Total * 100);
-        return $"https://revolut.me/{RevolutUsername}?currency={Currency}&amount={amountInSmallestUnit}";
+        var paymentAmount = GetPaymentAmount();
+        var amountInSmallestUnit = (long)(paymentAmount * 100);
+        var currency = GetPaymentCurrency();
+        return $"https://revolut.me/{RevolutUsername}?currency={currency}&amount={amountInSmallestUnit}";
     }
 }

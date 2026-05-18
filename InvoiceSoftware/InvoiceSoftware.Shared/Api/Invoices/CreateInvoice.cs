@@ -1,4 +1,5 @@
 using BlazorUtils.EasyApi;
+using InvoiceSoftware.Shared.Dtos.Invoices;
 
 namespace InvoiceSoftware.Shared.Api.Invoices;
 
@@ -13,6 +14,9 @@ public class CreateInvoice : IPost<Guid>
 
     [BodyParam]
     public List<Guid> ExpenseIds { get; init; } = [];
+
+    [BodyParam]
+    public List<ProductLineItemRequest> ProductLineItems { get; init; } = [];
 
     [BodyParam]
     public DateOnly IssueDate { get; init; }

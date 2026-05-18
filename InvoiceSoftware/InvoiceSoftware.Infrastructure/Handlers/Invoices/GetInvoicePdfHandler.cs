@@ -35,7 +35,13 @@ public class GetInvoicePdfHandler(IDbContextFactory<ApplicationDbContext> dbFact
             .Where(e => e.InvoiceId == request.Id)
             .ToListAsync(cancellationToken);
 
-        if (timeEntries.Count == 0 && expenses.Count == 0)
+        var productLineItems = await db.InvoiceLineItems
+            .Include(li => li.Product)
+            .Where(li => li.InvoiceId == request.Id)
+            .OrderBy(li => li.Order)
+            .ToListAsync(cancellationToken);
+
+        if (timeEntries.Count == 0 && expenses.Count == 0 && productLineItems.Count == 0)
             return HttpResult<byte[]>.NotFound();
 
         var userId = currentUserService.UserId;
@@ -48,7 +54,7 @@ public class GetInvoicePdfHandler(IDbContextFactory<ApplicationDbContext> dbFact
                 .FirstOrDefaultAsync(c => c.UserId == userId && c.CurrencyCode == invoice.Currency, cancellationToken);
         }
 
-        var pdfBytes = await pdfService.GenerateInvoicePdfAsync(invoice, timeEntries, expenses, businessProfile, currencySettings, invoice.Template);
+        var pdfBytes = await pdfService.GenerateInvoicePdfAsync(invoice, timeEntries, expenses, productLineItems, businessProfile, currencySettings, invoice.Template);
 
         return pdfBytes.Length == 0 ? HttpResult<byte[]>.NotFound() : HttpResult<byte[]>.Ok(pdfBytes);
     }

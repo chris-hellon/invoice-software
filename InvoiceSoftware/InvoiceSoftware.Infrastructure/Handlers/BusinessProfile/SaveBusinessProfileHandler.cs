@@ -58,7 +58,8 @@ public class SaveBusinessProfileHandler(IDbContextFactory<ApplicationDbContext> 
                 request.PayPalMeUsername,
                 request.WiseEmail,
                 request.RevolutUsername,
-                request.VietQrBankCode);
+                request.VietQrBankCode,
+                request.VndToDefaultCurrencyRate);
             db.BusinessProfiles.Add(profile);
         }
         else
@@ -87,7 +88,8 @@ public class SaveBusinessProfileHandler(IDbContextFactory<ApplicationDbContext> 
                 request.PayPalMeUsername,
                 request.WiseEmail,
                 request.RevolutUsername,
-                request.VietQrBankCode);
+                request.VietQrBankCode,
+                request.VndToDefaultCurrencyRate);
         }
 
         await db.SaveChangesAsync(cancellationToken);

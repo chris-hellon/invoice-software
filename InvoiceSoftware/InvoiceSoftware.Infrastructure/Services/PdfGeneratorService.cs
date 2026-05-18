@@ -26,7 +26,7 @@ public class PdfGeneratorService
     private const string BorderColor = "#e5e7eb";
     private const string BackgroundLight = "#f9fafb";
 
-    public Task<byte[]> GenerateInvoicePdfAsync(Invoice invoice, List<TimeEntry> timeEntries, List<Expense> expenses, BusinessProfile? businessProfile = null, CurrencyPaymentSettings? currencySettings = null, InvoiceTemplate? template = null)
+    public Task<byte[]> GenerateInvoicePdfAsync(Invoice invoice, List<TimeEntry> timeEntries, List<Expense> expenses, List<InvoiceLineItem>? productLineItems = null, BusinessProfile? businessProfile = null, CurrencyPaymentSettings? currencySettings = null, InvoiceTemplate? template = null)
     {
         try
         {
@@ -52,7 +52,10 @@ public class PdfGeneratorService
             // Calculate totals from expenses
             var expensesSubtotal = expenses.Sum(e => e.GetTotalAmount());
 
-            var subtotal = timeEntriesSubtotal + expensesSubtotal;
+            // Calculate totals from product line items
+            var productsSubtotal = productLineItems?.Sum(p => p.LineTotal.Amount) ?? 0;
+
+            var subtotal = timeEntriesSubtotal + expensesSubtotal + productsSubtotal;
             var taxAmount = subtotal * (invoice.TaxRate / 100);
             var total = subtotal + taxAmount;
 
@@ -108,6 +111,12 @@ public class PdfGeneratorService
                                 ComposeExpensesTable(contentColumn, expenses, currencySymbol, itemsLayout, showItemDescriptions);
                             }
 
+                            // Products Table - layout-aware
+                            if (productLineItems?.Any() == true)
+                            {
+                                ComposeProductsTable(contentColumn, productLineItems, currencySymbol, itemsLayout, showItemDescriptions);
+                            }
+
                             // Totals - layout-aware
                             ComposeTotals(contentColumn, invoice, subtotal, taxAmount, total, currencySymbol, primaryColor, footerLayout);
 
@@ -115,7 +124,7 @@ public class PdfGeneratorService
                             ComposeNotes(contentColumn, invoice, businessProfile);
 
                             // Payment Options
-                            ComposePaymentOptions(contentColumn, invoice, businessProfile, currencySettings, total, showPaymentQR, showBankDetails);
+                            ComposePaymentOptions(contentColumn, invoice, businessProfile, currencySettings, total, showPaymentQR, showBankDetails, businessProfile?.DefaultCurrency, businessProfile?.VndToDefaultCurrencyRate);
                         });
                     });
 
@@ -829,6 +838,137 @@ public class PdfGeneratorService
         column.Item().PaddingTop(16);
     }
 
+    private void ComposeProductsTable(ColumnDescriptor column, List<InvoiceLineItem> productLineItems, string currencySymbol, string itemsLayout, bool showItemDescriptions)
+    {
+        // Section header with vertically centered icon and text (blue theme)
+        column.Item().Background(BlueLight).Padding(8).Row(row =>
+        {
+            row.AutoItem().AlignMiddle().PaddingRight(8).Text("▢").FontSize(12).FontColor(BlueColor);
+            row.AutoItem().AlignMiddle().Text("PRODUCTS").FontSize(9).Bold().FontColor(BlueColor).LetterSpacing(0.5f);
+        });
+
+        // Table
+        column.Item().Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.RelativeColumn(4);
+                columns.ConstantColumn(70);
+                columns.ConstantColumn(80);
+                columns.ConstantColumn(80);
+            });
+
+            // Header - bordered layout adds borders to header cells
+            var headerBorder = itemsLayout == "bordered";
+            table.Header(header =>
+            {
+                if (headerBorder)
+                {
+                    header.Cell().Background(BackgroundLight).Border(1).BorderColor(BorderColor).Padding(12)
+                        .Text("Description").FontSize(9).Bold().FontColor(LightText).LetterSpacing(0.3f);
+                    header.Cell().Background(BackgroundLight).Border(1).BorderColor(BorderColor).Padding(12)
+                        .AlignCenter().Text("Qty").FontSize(9).Bold().FontColor(LightText).LetterSpacing(0.3f);
+                    header.Cell().Background(BackgroundLight).Border(1).BorderColor(BorderColor).Padding(12)
+                        .AlignRight().Text("Rate").FontSize(9).Bold().FontColor(LightText).LetterSpacing(0.3f);
+                    header.Cell().Background(BackgroundLight).Border(1).BorderColor(BorderColor).Padding(12)
+                        .AlignRight().Text("Amount").FontSize(9).Bold().FontColor(LightText).LetterSpacing(0.3f);
+                }
+                else
+                {
+                    header.Cell().Background(BackgroundLight).BorderBottom(1).BorderColor(BorderColor).Padding(12)
+                        .Text("Description").FontSize(9).Bold().FontColor(LightText).LetterSpacing(0.3f);
+                    header.Cell().Background(BackgroundLight).BorderBottom(1).BorderColor(BorderColor).Padding(12)
+                        .AlignCenter().Text("Qty").FontSize(9).Bold().FontColor(LightText).LetterSpacing(0.3f);
+                    header.Cell().Background(BackgroundLight).BorderBottom(1).BorderColor(BorderColor).Padding(12)
+                        .AlignRight().Text("Rate").FontSize(9).Bold().FontColor(LightText).LetterSpacing(0.3f);
+                    header.Cell().Background(BackgroundLight).BorderBottom(1).BorderColor(BorderColor).Padding(12)
+                        .AlignRight().Text("Amount").FontSize(9).Bold().FontColor(LightText).LetterSpacing(0.3f);
+                }
+            });
+
+            // Rows - apply layout styling
+            var rowIndex = 0;
+            foreach (var item in productLineItems.OrderBy(p => p.Order))
+            {
+                // Determine row background for striped layout
+                var isStriped = itemsLayout == "striped" && rowIndex % 2 == 1;
+                var isBordered = itemsLayout == "bordered";
+
+                // Description cell - show product name if linked
+                void RenderDescriptionContent(IContainer container)
+                {
+                    container.Column(descCol =>
+                    {
+                        descCol.Item().Text(item.Description).FontSize(10).FontColor(DarkText);
+                        if (showItemDescriptions && item.Product != null)
+                        {
+                            descCol.Item().PaddingTop(2).Text($"Product: {item.Product.Name}").FontSize(9).FontColor(LightText);
+                        }
+                    });
+                }
+
+                if (isBordered)
+                {
+                    if (isStriped)
+                        table.Cell().Background(BackgroundLight).Border(1).BorderColor(BorderColor).Padding(12).Element(RenderDescriptionContent);
+                    else
+                        table.Cell().Border(1).BorderColor(BorderColor).Padding(12).Element(RenderDescriptionContent);
+                }
+                else if (isStriped)
+                {
+                    table.Cell().Background(BackgroundLight).BorderBottom(1).BorderColor(BorderColor).Padding(12).Element(RenderDescriptionContent);
+                }
+                else
+                {
+                    table.Cell().BorderBottom(1).BorderColor(BorderColor).Padding(12).Element(RenderDescriptionContent);
+                }
+
+                // Quantity cell
+                if (isBordered)
+                {
+                    if (isStriped)
+                        table.Cell().Background(BackgroundLight).Border(1).BorderColor(BorderColor).Padding(12).AlignCenter().Text($"{item.Quantity:N2}").FontSize(10).FontColor(MediumText);
+                    else
+                        table.Cell().Border(1).BorderColor(BorderColor).Padding(12).AlignCenter().Text($"{item.Quantity:N2}").FontSize(10).FontColor(MediumText);
+                }
+                else if (isStriped)
+                    table.Cell().Background(BackgroundLight).BorderBottom(1).BorderColor(BorderColor).Padding(12).AlignCenter().Text($"{item.Quantity:N2}").FontSize(10).FontColor(MediumText);
+                else
+                    table.Cell().BorderBottom(1).BorderColor(BorderColor).Padding(12).AlignCenter().Text($"{item.Quantity:N2}").FontSize(10).FontColor(MediumText);
+
+                // Rate cell
+                if (isBordered)
+                {
+                    if (isStriped)
+                        table.Cell().Background(BackgroundLight).Border(1).BorderColor(BorderColor).Padding(12).AlignRight().Text($"{currencySymbol}{item.UnitPrice.Amount:N2}").FontSize(10).FontColor(MediumText);
+                    else
+                        table.Cell().Border(1).BorderColor(BorderColor).Padding(12).AlignRight().Text($"{currencySymbol}{item.UnitPrice.Amount:N2}").FontSize(10).FontColor(MediumText);
+                }
+                else if (isStriped)
+                    table.Cell().Background(BackgroundLight).BorderBottom(1).BorderColor(BorderColor).Padding(12).AlignRight().Text($"{currencySymbol}{item.UnitPrice.Amount:N2}").FontSize(10).FontColor(MediumText);
+                else
+                    table.Cell().BorderBottom(1).BorderColor(BorderColor).Padding(12).AlignRight().Text($"{currencySymbol}{item.UnitPrice.Amount:N2}").FontSize(10).FontColor(MediumText);
+
+                // Amount cell
+                if (isBordered)
+                {
+                    if (isStriped)
+                        table.Cell().Background(BackgroundLight).Border(1).BorderColor(BorderColor).Padding(12).AlignRight().Text($"{currencySymbol}{item.LineTotal.Amount:N2}").FontSize(10).Bold().FontColor(DarkText);
+                    else
+                        table.Cell().Border(1).BorderColor(BorderColor).Padding(12).AlignRight().Text($"{currencySymbol}{item.LineTotal.Amount:N2}").FontSize(10).Bold().FontColor(DarkText);
+                }
+                else if (isStriped)
+                    table.Cell().Background(BackgroundLight).BorderBottom(1).BorderColor(BorderColor).Padding(12).AlignRight().Text($"{currencySymbol}{item.LineTotal.Amount:N2}").FontSize(10).Bold().FontColor(DarkText);
+                else
+                    table.Cell().BorderBottom(1).BorderColor(BorderColor).Padding(12).AlignRight().Text($"{currencySymbol}{item.LineTotal.Amount:N2}").FontSize(10).Bold().FontColor(DarkText);
+
+                rowIndex++;
+            }
+        });
+
+        column.Item().PaddingTop(16);
+    }
+
     private void ComposeTotals(ColumnDescriptor column, Invoice invoice, decimal subtotal, decimal taxAmount, decimal total, string currencySymbol, string primaryColor, string footerLayout)
     {
         // Totals section with light gray background matching the web view
@@ -916,7 +1056,7 @@ public class PdfGeneratorService
         column.Item().PaddingTop(16);
     }
 
-    private void ComposePaymentOptions(ColumnDescriptor column, Invoice invoice, BusinessProfile? businessProfile, CurrencyPaymentSettings? currencySettings, decimal total, bool showPaymentQR, bool showBankDetails)
+    private void ComposePaymentOptions(ColumnDescriptor column, Invoice invoice, BusinessProfile? businessProfile, CurrencyPaymentSettings? currencySettings, decimal total, bool showPaymentQR, bool showBankDetails, string? defaultCurrency, decimal? vndToDefaultCurrencyRate)
     {
         if (invoice.Status == Domain.Enums.InvoiceStatus.Paid || invoice.Status == Domain.Enums.InvoiceStatus.Void)
             return;
@@ -930,7 +1070,19 @@ public class PdfGeneratorService
                         !string.IsNullOrEmpty(currencySettings.VietQrBankCode) &&
                         !string.IsNullOrEmpty(currencySettings.BankAccountNumber);
 
-        if (!hasOnlinePayments && !hasBankDetails && !hasVietQR) return;
+        // For VND invoices, only show online payments if conversion rate is set
+        var canShowOnlinePayments = hasOnlinePayments && (invoice.Currency != "VND" || vndToDefaultCurrencyRate.HasValue);
+
+        if (!canShowOnlinePayments && !hasBankDetails && !hasVietQR) return;
+
+        // Calculate payment amount (convert VND if needed)
+        var paymentAmount = total;
+        var paymentCurrency = invoice.Currency;
+        if (invoice.Currency == "VND" && vndToDefaultCurrencyRate.HasValue && vndToDefaultCurrencyRate.Value > 0)
+        {
+            paymentAmount = Math.Round(total / vndToDefaultCurrencyRate.Value, 2);
+            paymentCurrency = defaultCurrency ?? "USD";
+        }
 
         // Keep payment options together - move to new page if can't fit
         column.Item().ShowEntire().Background(BlueLight).Padding(16).Column(paymentCol =>
@@ -938,40 +1090,46 @@ public class PdfGeneratorService
             paymentCol.Item().Text("PAYMENT OPTIONS").FontSize(9).Bold().FontColor(LightText).LetterSpacing(0.5f);
             paymentCol.Item().PaddingTop(12);
 
-            // Online payment links
-            if (invoice.Currency != "VND" && hasOnlinePayments)
+            var showedOnlinePayments = false;
+
+            // Online payment links (show for non-VND, or VND with conversion rate)
+            if (canShowOnlinePayments)
             {
+                showedOnlinePayments = true;
                 paymentCol.Item().Row(row =>
                 {
                     if (!string.IsNullOrEmpty(businessProfile?.PayPalMeUsername))
                     {
-                        var amount = total.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+                        var amount = paymentAmount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
                         var payPalLink = $"https://paypal.me/{businessProfile.PayPalMeUsername}/{amount}";
                         row.AutoItem().PaddingRight(16).Column(ppCol =>
                         {
-                            ppCol.Item().Text("PayPal").FontSize(9).Bold().FontColor(DarkText);
+                            var label = invoice.Currency == "VND" ? $"PayPal ({paymentCurrency})" : "PayPal";
+                            ppCol.Item().Text(label).FontSize(9).Bold().FontColor(DarkText);
                             ppCol.Item().Text(payPalLink).FontSize(9).FontColor(BlueColor);
                         });
                     }
                     if (!string.IsNullOrEmpty(businessProfile?.WiseEmail))
                     {
-                        var amount = total.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+                        var amount = paymentAmount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
                         var email = Uri.EscapeDataString(businessProfile.WiseEmail);
-                        var wiseLink = $"https://wise.com/pay/me?email={email}&amount={amount}&currency={invoice.Currency}";
+                        var wiseLink = $"https://wise.com/pay/me?email={email}&amount={amount}&currency={paymentCurrency}";
                         row.AutoItem().PaddingRight(16).Column(wiseCol =>
                         {
-                            wiseCol.Item().Text("Wise").FontSize(9).Bold().FontColor(DarkText);
+                            var label = invoice.Currency == "VND" ? $"Wise ({paymentCurrency})" : "Wise";
+                            wiseCol.Item().Text(label).FontSize(9).Bold().FontColor(DarkText);
                             wiseCol.Item().Text(wiseLink).FontSize(9).FontColor(BlueColor);
                         });
                     }
                     if (!string.IsNullOrEmpty(businessProfile?.RevolutUsername))
                     {
                         // Revolut payment link with amount in smallest currency unit (pence/cents)
-                        var amountInSmallestUnit = (long)(total * 100);
-                        var revolutLink = $"https://revolut.me/{businessProfile.RevolutUsername}?currency={invoice.Currency}&amount={amountInSmallestUnit}";
+                        var amountInSmallestUnit = (long)(paymentAmount * 100);
+                        var revolutLink = $"https://revolut.me/{businessProfile.RevolutUsername}?currency={paymentCurrency}&amount={amountInSmallestUnit}";
                         row.AutoItem().Column(revCol =>
                         {
-                            revCol.Item().Text("Revolut").FontSize(9).Bold().FontColor(DarkText);
+                            var label = invoice.Currency == "VND" ? $"Revolut ({paymentCurrency})" : "Revolut";
+                            revCol.Item().Text(label).FontSize(9).Bold().FontColor(DarkText);
                             revCol.Item().Text(revolutLink).FontSize(9).FontColor(BlueColor);
                         });
                     }
@@ -984,7 +1142,7 @@ public class PdfGeneratorService
                 var qrImage = FetchVietQRImage(currencySettings!, invoice, total);
                 if (qrImage != null)
                 {
-                    if (hasOnlinePayments) paymentCol.Item().PaddingTop(12);
+                    if (showedOnlinePayments) paymentCol.Item().PaddingTop(16);
                     paymentCol.Item().Text("Vietnamese Bank Transfer (VietQR)").FontSize(9).Bold().FontColor(DarkText);
                     paymentCol.Item().PaddingTop(8).Row(row =>
                     {
@@ -1007,7 +1165,7 @@ public class PdfGeneratorService
             // Bank transfer for non-VND
             else if (hasBankDetails && invoice.Currency != "VND")
             {
-                if (hasOnlinePayments) paymentCol.Item().PaddingTop(12).BorderTop(1).BorderColor(BorderColor).PaddingTop(12);
+                if (showedOnlinePayments) paymentCol.Item().PaddingTop(12).BorderTop(1).BorderColor(BorderColor).PaddingTop(12);
                 paymentCol.Item().Text("Bank Transfer").FontSize(9).Bold().FontColor(DarkText);
                 paymentCol.Item().PaddingTop(6).Row(row =>
                 {
